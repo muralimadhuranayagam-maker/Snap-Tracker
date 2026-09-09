@@ -1,0 +1,813 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── RBAC ────────────────────────────────────────────────────────────────────
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique // SUPER_ADMIN, ADMIN, EMPLOYEE
+  description String?
+  permissions RolePermission[]
+  users       User[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  name        String           @unique // e.g. tasks:create, users:manage, reports:view
+  description String?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+// ─── DEPARTMENTS ─────────────────────────────────────────────────────────────
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique // FDE, Marketing, Sales
+  code        String   @unique // FDE, MKT, SAL
+  description String?
+  color       String   @default("#6366f1")
+  users       User[]
+  tasks       Task[]
+  projects    Project[]
+  tickets     Ticket[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── USERS ───────────────────────────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  name           String
+  password       String
+  avatar         String?
+  title          String?
+  phone          String?
+  roleId         String
+  departmentId   String?
+  isActive       Boolean   @default(true)
+  lastLoginAt    DateTime?
+  passwordResetToken String?
+  passwordResetExpiry DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  role           Role       @relation(fields: [roleId], references: [id])
+  department     Department? @relation(fields: [departmentId], references: [id])
+
+  // Task relations
+  assignedTasks  Task[]     @relation("TaskAssignee")
+  reportedTasks  Task[]     @relation("TaskReporter")
+  reviewerTasks  Task[]     @relation("TaskReviewer")
+  
+  // Ticket relations
+  reportedTickets Ticket[]  @relation("TicketReporter")
+  assignedTickets Ticket[]  @relation("TicketAssignee")
+  ticketComments  TicketComment[]
+
+  // Approvals
+  requestedApprovals Approval[] @relation("ApprovalRequester")
+  assignedApprovals  Approval[] @relation("ApprovalApprover")
+
+  // Other relations
+  comments       TaskComment[]
+  worklogs       TaskWorklog[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+  notificationPrefs NotificationPreference?
+  projectMemberships ProjectMember[]
+  aiInteractions AIInteraction[]
+  aiRecommendationFeedback AIRecommendationFeedback[]
+  savedFilters   SavedFilter[]
+  sessions       UserSession[]
+
+  @@index([email])
+  @@index([departmentId])
+  @@index([roleId])
+}
+
+model UserSession {
+  id         String   @id @default(uuid())
+  userId     String
+  token      String   @unique
+  expiresAt  DateTime
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+// ─── PROJECTS ────────────────────────────────────────────────────────────────
+
+model Project {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  status       String   @default("ACTIVE") // ACTIVE, ON_HOLD, COMPLETED, CANCELLED
+  priority     String   @default("MEDIUM")
+  startDate    DateTime?
+  dueDate      DateTime?
+  departmentId String?
+  customerId   String?
+  createdById  String
+  health       String   @default("HEALTHY") // HEALTHY, AT_RISK, CRITICAL
+  color        String   @default("#6366f1")
+  isArchived   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department   Department?     @relation(fields: [departmentId], references: [id])
+  customer     Customer?       @relation(fields: [customerId], references: [id])
+  tasks        Task[]
+  tickets      Ticket[]
+  members      ProjectMember[]
+  milestones   Milestone[]
+  documents    ProjectDocument[]
+  aiRisks      AIProjectRisk[]
+
+  @@index([departmentId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  role      String   @default("MEMBER") // LEAD, MEMBER, VIEWER
+  joinedAt  DateTime @default(now())
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model Milestone {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  dueDate     DateTime?
+  status      String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, AT_RISK
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+}
+
+model ProjectDocument {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  content   String?
+  fileUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ─── TASKS ───────────────────────────────────────────────────────────────────
+
+model TaskType {
+  id          String   @id @default(uuid())
+  name        String   @unique // Task, Bug, Feature, Request, Customer Issue, etc.
+  icon        String   @default("circle")
+  color       String   @default("#6366f1")
+  description String?
+  isSystem    Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  tasks       Task[]
+  createdAt   DateTime @default(now())
+}
+
+model TaskPriority {
+  id          String   @id @default(uuid())
+  name        String   @unique // LOW, MEDIUM, HIGH, URGENT, CRITICAL
+  level       Int      @unique // 1=LOW, 2=MEDIUM, 3=HIGH, 4=URGENT, 5=CRITICAL
+  color       String
+  icon        String   @default("flag")
+  isSystem    Boolean  @default(false)
+  tasks       Task[]
+  createdAt   DateTime @default(now())
+}
+
+model TaskStatus {
+  id          String   @id @default(uuid())
+  name        String   @unique // BACKLOG, TODO, IN_PROGRESS, BLOCKED, IN_REVIEW, APPROVED, DONE, CANCELLED
+  category    String   @default("ACTIVE") // PENDING, ACTIVE, REVIEW, DONE, CANCELLED
+  color       String
+  icon        String   @default("circle")
+  order       Int      @default(0)
+  isSystem    Boolean  @default(false)
+  isTerminal  Boolean  @default(false) // DONE, CANCELLED
+  tasks       Task[]
+  createdAt   DateTime @default(now())
+}
+
+model Label {
+  id        String      @id @default(uuid())
+  name      String      @unique
+  color     String      @default("#6366f1")
+  tasks     TaskLabel[]
+  createdAt DateTime    @default(now())
+}
+
+model Task {
+  id            String   @id @default(uuid())
+  taskId        String   @unique // FDE-1024, MKT-204, SAL-331
+  title         String
+  description   String?
+  departmentId  String?
+  projectId     String?
+  customerId    String?
+  ticketId      String?
+  milestoneId   String?
+  taskTypeId    String?
+  priorityId    String?
+  statusId      String?
+  assigneeId    String?
+  reporterId    String?
+  reviewerId    String?
+  parentId      String?  // for subtasks
+  startDate     DateTime?
+  dueDate       DateTime?
+  estimatedHours Float?
+  actualHours   Float    @default(0)
+  isArchived    Boolean  @default(false)
+  isDeleted     Boolean  @default(false)
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // AI fields
+  aiPriorityScore Float?
+  aiDeadlineRisk  String? // LOW, MEDIUM, HIGH, CRITICAL
+  aiRiskScore     Float?
+
+  department    Department?   @relation(fields: [departmentId], references: [id])
+  project       Project?      @relation(fields: [projectId], references: [id])
+  customer      Customer?     @relation(fields: [customerId], references: [id])
+  ticket        Ticket?       @relation("TicketTasks", fields: [ticketId], references: [id])
+  milestone     Milestone?    @relation(fields: [milestoneId], references: [id])
+  taskType      TaskType?     @relation(fields: [taskTypeId], references: [id])
+  priority      TaskPriority? @relation(fields: [priorityId], references: [id])
+  status        TaskStatus?   @relation(fields: [statusId], references: [id])
+  assignee      User?         @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  reporter      User?         @relation("TaskReporter", fields: [reporterId], references: [id])
+  reviewer      User?         @relation("TaskReviewer", fields: [reviewerId], references: [id])
+  parent        Task?         @relation("TaskSubtasks", fields: [parentId], references: [id])
+  subtasks      Task[]        @relation("TaskSubtasks")
+
+  labels        TaskLabel[]
+  comments      TaskComment[]
+  attachments   TaskAttachment[]
+  worklogs      TaskWorklog[]
+  history       TaskHistory[]
+  approvals     Approval[]
+
+  // Dependencies
+  blockedByDeps TaskDependency[] @relation("DependencyTarget")
+  blockingDeps  TaskDependency[] @relation("DependencySource")
+
+  notifications Notification[]
+  aiRecommendations AIRecommendation[]
+
+  @@index([departmentId])
+  @@index([projectId])
+  @@index([customerId])
+  @@index([ticketId])
+  @@index([assigneeId])
+  @@index([statusId])
+  @@index([priorityId])
+  @@index([dueDate])
+  @@index([taskId])
+  @@index([parentId])
+  @@index([isDeleted])
+}
+
+model TaskLabel {
+  taskId  String
+  labelId String
+  task    Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label   Label  @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+}
+
+model TaskDependency {
+  id       String @id @default(uuid())
+  sourceId String // task that is blocking
+  targetId String // task that is being blocked
+  type     String @default("BLOCKS") // BLOCKS, DEPENDS_ON, RELATED_TO
+
+  source   Task   @relation("DependencySource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target   Task   @relation("DependencyTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, type])
+  @@index([sourceId])
+  @@index([targetId])
+}
+
+model TaskComment {
+  id         String   @id @default(uuid())
+  taskId     String
+  userId     String
+  content    String
+  isInternal Boolean  @default(false) // internal notes - admin/super admin only
+  isEdited   Boolean  @default(false)
+  parentId   String?  // for replies
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  task       Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id])
+  parent     TaskComment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies    TaskComment[] @relation("CommentReplies")
+  attachments TaskAttachment[]
+  reactions  CommentReaction[]
+
+  @@index([taskId])
+  @@index([userId])
+}
+
+model CommentReaction {
+  id        String      @id @default(uuid())
+  commentId String
+  userId    String
+  emoji     String
+  createdAt DateTime    @default(now())
+  comment   TaskComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, emoji])
+}
+
+model TaskAttachment {
+  id          String       @id @default(uuid())
+  taskId      String?
+  commentId   String?
+  name        String
+  originalName String
+  mimeType    String
+  size        Int
+  url         String
+  uploadedById String
+  createdAt   DateTime     @default(now())
+
+  task        Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  comment     TaskComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model TaskWorklog {
+  id          String   @id @default(uuid())
+  taskId      String
+  userId      String
+  description String?
+  hours       Float
+  logDate     DateTime @default(now())
+  timerStart  DateTime?
+  timerEnd    DateTime?
+  createdAt   DateTime @default(now())
+
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
+}
+
+model TaskHistory {
+  id        String   @id @default(uuid())
+  taskId    String
+  userId    String?
+  action    String   // STATUS_CHANGED, ASSIGNED, PRIORITY_CHANGED, COMMENTED, etc.
+  field     String?  // which field changed
+  oldValue  String?
+  newValue  String?
+  metadata  String?  // JSON string for extra info
+  createdAt DateTime @default(now())
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([createdAt])
+}
+
+// ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String
+  taskId     String?
+  type       String   // TASK_ASSIGNED, DEADLINE_APPROACHING, TASK_OVERDUE, etc.
+  title      String
+  message    String
+  isRead     Boolean  @default(false)
+  actionUrl  String?
+  metadata   String?  // JSON
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task       Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+}
+
+model NotificationPreference {
+  id                  String  @id @default(uuid())
+  userId              String  @unique
+  emailNotifications  Boolean @default(true)
+  taskAssigned        Boolean @default(true)
+  taskReassigned      Boolean @default(true)
+  taskMentioned       Boolean @default(true)
+  commentAdded        Boolean @default(true)
+  deadlineApproaching Boolean @default(true)
+  taskOverdue         Boolean @default(true)
+  taskBlocked         Boolean @default(true)
+  reviewRequested     Boolean @default(true)
+  taskApproved        Boolean @default(true)
+  taskRejected        Boolean @default(true)
+  priorityChanged     Boolean @default(false)
+  projectAtRisk       Boolean @default(true)
+
+  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EscalationRule {
+  id         String  @id @default(uuid())
+  name       String
+  condition  String  // JSON: trigger condition
+  actions    String  // JSON: escalation actions
+  isActive   Boolean @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ─── WORKFLOWS ───────────────────────────────────────────────────────────────
+
+model Workflow {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  trigger     String   // TASK_CREATED, TASK_STATUS_CHANGED, TASK_OVERDUE, etc.
+  isActive    Boolean  @default(true)
+  isSystem    Boolean  @default(false) // built-in workflows
+  config      String   // JSON: full workflow config
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps       WorkflowStep[]
+  executions  WorkflowExecution[]
+}
+
+model WorkflowStep {
+  id         String   @id @default(uuid())
+  workflowId String
+  order      Int
+  type       String   // CONDITION, ACTION, NOTIFICATION
+  config     String   // JSON: step configuration
+  createdAt  DateTime @default(now())
+
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+}
+
+model WorkflowExecution {
+  id         String   @id @default(uuid())
+  workflowId String
+  triggeredBy String? // entity ID that triggered
+  status     String   @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED
+  result     String?  // JSON: execution results
+  error      String?
+  startedAt  DateTime @default(now())
+  completedAt DateTime?
+
+  workflow   Workflow @relation(fields: [workflowId], references: [id])
+
+  @@index([workflowId])
+}
+
+// ─── AUDIT LOG ───────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  userEmail  String?
+  action     String   // CREATE_TASK, UPDATE_TASK, DELETE_USER, etc.
+  entity     String   // Task, User, Project, etc.
+  entityId   String?
+  oldValue   String?  // JSON
+  newValue   String?  // JSON
+  ipAddress  String?
+  userAgent  String?
+  metadata   String?  // JSON
+  createdAt  DateTime @default(now())
+
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ─── SAVED FILTERS ───────────────────────────────────────────────────────────
+
+model SavedFilter {
+  id         String   @id @default(uuid())
+  userId     String
+  name       String
+  filters    String   // JSON
+  isShared   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── AI MODELS ───────────────────────────────────────────────────────────────
+
+model AIRecommendation {
+  id              String   @id @default(uuid())
+  type            String   // ASSIGNEE, PRIORITY, DEADLINE_RISK, WORKLOAD, BLOCKER, etc.
+  taskId          String?
+  title           String
+  message         String
+  reasoning       String   // JSON: explanation factors
+  confidence      Float    @default(0.7) // 0-1
+  status          String   @default("ACTIVE") // ACTIVE, DISMISSED, ACTED_ON
+  metadata        String?  // JSON: extra data
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime?
+
+  task            Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  feedback        AIRecommendationFeedback[]
+
+  @@index([type, status])
+  @@index([taskId])
+}
+
+model AIRecommendationFeedback {
+  id               String           @id @default(uuid())
+  recommendationId String
+  userId           String
+  isHelpful        Boolean
+  reason           String?
+  createdAt        DateTime         @default(now())
+
+  recommendation   AIRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  user             User             @relation(fields: [userId], references: [id])
+}
+
+model AIInteraction {
+  id         String   @id @default(uuid())
+  userId     String
+  sessionId  String?
+  query      String
+  intent     String?
+  response   String
+  actions    String?  // JSON: actions taken
+  tokenCount Int?
+  model      String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AIProjectRisk {
+  id          String   @id @default(uuid())
+  projectId   String
+  health      String   // HEALTHY, AT_RISK, CRITICAL
+  riskScore   Float
+  factors     String   // JSON: risk factors
+  suggestions String?  // JSON: recommendations
+  generatedAt DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model AIDailyPlan {
+  id         String   @id @default(uuid())
+  userId     String
+  date       DateTime
+  plan       String   // JSON: time blocks
+  reasoning  String?
+  isModified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+// ─── ORGANIZATION SETTINGS ───────────────────────────────────────────────────
+
+model OrgSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  category  String   @default("general")
+  updatedAt DateTime @updatedAt
+}
+
+// ─── INTEGRATION REGISTRY (future-ready) ─────────────────────────────────────
+
+model Integration {
+  id         String   @id @default(uuid())
+  name       String   // google_calendar, slack, github, etc.
+  config     String?  // JSON (encrypted in production)
+  isActive   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ─── CUSTOMERS ───────────────────────────────────────────────────────────────
+
+model Customer {
+  id                  String    @id @default(uuid())
+  name                String    @unique // e.g. ABC Corporation
+  code                String    @unique // ABC
+  tier                String    @default("ENTERPRISE") // ENTERPRISE, GROWTH, STANDARD
+  industry            String?
+  healthScore         Float     @default(95.0) // 0-100
+  primaryContactName  String?
+  primaryContactEmail String?
+  primaryContactPhone String?
+  arr                 Float?    // Annual Recurring Revenue ($)
+  status              String    @default("ACTIVE") // ACTIVE, ONBOARDING, CHURN_RISK, INACTIVE
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  projects            Project[]
+  tickets             Ticket[]
+  tasks               Task[]
+
+  @@index([name])
+  @@index([status])
+}
+
+// ─── TICKETS ─────────────────────────────────────────────────────────────────
+
+model Ticket {
+  id            String    @id @default(uuid())
+  ticketId      String    @unique // e.g. TKT-2026-0001
+  title         String
+  description   String
+  category      String    // Customer Issue, Technical Bug, Onboarding, Feature Request, Billing, etc.
+  subcategory   String?
+  departmentId  String?
+  customerId    String?
+  projectId     String?
+  priority      String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT, CRITICAL
+  severity      String    @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  status        String    @default("NEW") // NEW, TRIAGED, ASSIGNED, IN_PROGRESS, WAITING, BLOCKED, RESOLVED, CLOSED, REOPENED
+  reporterId    String
+  assigneeId    String?
+  
+  // SLA
+  slaHours      Float     @default(24) // Target resolution hours
+  slaTarget     DateTime? // Exact target date
+  slaBreached   Boolean   @default(false)
+  slaBreachedAt DateTime?
+  resolvedAt    DateTime?
+  closedAt      DateTime?
+
+  // AI Triage output
+  aiCategoryScore       Float?
+  aiSuggestedAssigneeId String?
+  aiSummary             String?
+  duplicateOfId         String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  department    Department? @relation(fields: [departmentId], references: [id])
+  customer      Customer?   @relation(fields: [customerId], references: [id])
+  project       Project?    @relation(fields: [projectId], references: [id])
+  reporter      User        @relation("TicketReporter", fields: [reporterId], references: [id])
+  assignee      User?       @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  
+  // Tasks spawned from this ticket
+  linkedTasks   Task[]      @relation("TicketTasks")
+
+  comments      TicketComment[]
+  attachments   TicketAttachment[]
+  history       TicketHistory[]
+
+  @@index([ticketId])
+  @@index([status])
+  @@index([priority])
+  @@index([departmentId])
+  @@index([customerId])
+  @@index([reporterId])
+  @@index([assigneeId])
+}
+
+model TicketComment {
+  id         String   @id @default(uuid())
+  ticketId   String
+  userId     String
+  content    String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
+}
+
+model TicketAttachment {
+  id           String   @id @default(uuid())
+  ticketId     String
+  name         String
+  originalName String
+  mimeType     String
+  size         Int
+  url          String
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+model TicketHistory {
+  id        String   @id @default(uuid())
+  ticketId  String
+  userId    String?
+  action    String   // CREATED, STATUS_CHANGED, ASSIGNED, CONVERTED_TO_TASK, etc.
+  field     String?
+  oldValue  String?
+  newValue  String?
+  metadata  String?  // JSON
+  createdAt DateTime @default(now())
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+// ─── APPROVALS ───────────────────────────────────────────────────────────────
+
+model Approval {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  type        String    // CAMPAIGN_LAUNCH, DEPLOYMENT, ACCESS_REQUEST, TASK_COMPLETION, BUDGET
+  status      String    @default("PENDING") // PENDING, APPROVED, REJECTED, CANCELLED
+  requesterId String
+  approverId  String?
+  entityType  String?   // Task, Project, Ticket
+  entityId    String?   // ID of linked entity
+  notes       String?
+  decisionAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  requester   User      @relation("ApprovalRequester", fields: [requesterId], references: [id])
+  approver    User?     @relation("ApprovalApprover", fields: [approverId], references: [id])
+  task        Task?     @relation(fields: [taskId], references: [id])
+  taskId      String?
+
+  @@index([status])
+  @@index([requesterId])
+  @@index([approverId])
+}
