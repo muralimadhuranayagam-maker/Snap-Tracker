@@ -30,6 +30,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
+import { TeamAttendanceOverviewWidget } from '../components/attendance/TeamAttendanceOverviewWidget';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -410,6 +411,11 @@ export function DashboardPage() {
                 </a>
               </div>
             </div>
+          </div>
+
+          {/* ── Team Attendance & Daily Activity Roster (Camera Verification & Evening Logoff) ── */}
+          <div className="mb-6">
+            <TeamAttendanceOverviewWidget />
           </div>
 
           {/* ── Active Tasks & Delivery Velocity Cockpit ────────────────── */}
@@ -850,6 +856,11 @@ export function DashboardPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* ── Team Attendance & Daily Activity Roster (Camera Verification & Evening Logoff) ── */}
+          <div className="mt-6">
+            <TeamAttendanceOverviewWidget />
           </div>
         </>
       )}

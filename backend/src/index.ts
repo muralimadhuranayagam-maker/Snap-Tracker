@@ -29,6 +29,7 @@ import customerRoutes from './routes/customers';
 import approvalRoutes from './routes/approvals';
 import myworkRoutes from './routes/mywork';
 import workloadRoutes from './routes/workload';
+import attendanceRoutes from './routes/attendance';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -106,6 +107,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/mywork', myworkRoutes);
 app.use('/api/workload', workloadRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 // 404 handler
 app.use((_req, res) => {

@@ -102,6 +102,7 @@ model User {
   aiRecommendationFeedback AIRecommendationFeedback[]
   savedFilters   SavedFilter[]
   sessions       UserSession[]
+  attendances    Attendance[]
 
   @@index([email])
   @@index([departmentId])
@@ -811,3 +812,30 @@ model Approval {
   @@index([requesterId])
   @@index([approverId])
 }
+
+// ─── ATTENDANCE & SHIFT ACTIVITY ─────────────────────────────────────────────
+
+model Attendance {
+  id           String    @id @default(uuid())
+  userId       String
+  date         String    // Format: YYYY-MM-DD
+  checkInTime  DateTime  @default(now())
+  checkInPhoto String    // Webcam photo snapshot URL (e.g. /uploads/attendance_...)
+  checkOutTime DateTime?
+  status       String    @default("CHECKED_IN") // CHECKED_IN, CHECKED_OUT
+  workHours    Float?    @default(0)
+  summaryJson  String?   // JSON snapshot of daily tasks, worklogs, tickets, and activity
+  notes        String?
+  deviceInfo   String?
+  ipAddress    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([date])
+  @@index([userId])
+  @@index([status])
+}
+
