@@ -7,38 +7,14 @@ import { broadcastToUser, WSEventTypes } from '../services/websocket';
 const router = Router();
 router.use(authenticate);
 
-// ─── ENSURE ENTITY VIEWS TABLE ──────────────────────────────────────────────
-async function initEntityViewsTable() {
-  try {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS entity_last_views (
-        userId TEXT NOT NULL,
-        entity TEXT NOT NULL,
-        lastViewedAt TEXT NOT NULL,
-        PRIMARY KEY (userId, entity)
-      )
-    `);
-  } catch (err) {
-    console.error('[NOTIFICATIONS] Failed to ensure entity_last_views table:', err);
-  }
-}
-initEntityViewsTable();
-
 // GET /api/notifications/sidebar-badges
 router.get('/sidebar-badges', async (req, res, next) => {
   try {
     const user = req.user!;
 
-    // 1. Get user's recorded read timestamps
-    let viewRows: any[] = [];
-    try {
-      viewRows = await prisma.$queryRawUnsafe(
-        `SELECT entity, lastViewedAt FROM entity_last_views WHERE userId = ?`,
-        user.id
-      );
-    } catch {
-      await initEntityViewsTable();
-    }
+    let viewRows = await prisma.entityLastView.findMany({
+      where: { userId: user.id }
+    });
     const viewMap = new Map<string, string>();
     viewRows.forEach((r) => {
       viewMap.set(r.entity, r.lastViewedAt);
@@ -131,28 +107,13 @@ router.post('/viewed', async (req, res, next) => {
       throw new AppError('Valid entity (tasks, tickets, projects) is required', 400);
     }
 
-    const nowIso = new Date().toISOString();
-
-    try {
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO entity_last_views (userId, entity, lastViewedAt)
-         VALUES (?, ?, ?)
-         ON CONFLICT(userId, entity) DO UPDATE SET lastViewedAt = excluded.lastViewedAt`,
-        user.id,
-        entity,
-        nowIso
-      );
-    } catch {
-      await initEntityViewsTable();
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO entity_last_views (userId, entity, lastViewedAt)
-         VALUES (?, ?, ?)
-         ON CONFLICT(userId, entity) DO UPDATE SET lastViewedAt = excluded.lastViewedAt`,
-        user.id,
-        entity,
-        nowIso
-      );
-    }
+    await prisma.entityLastView.upsert({
+      where: {
+        userId_entity: { userId: user.id, entity }
+      },
+      update: { lastViewedAt: nowIso },
+      create: { userId: user.id, entity, lastViewedAt: nowIso }
+    });
 
     // Mark corresponding notifications as read
     const typeMapping: Record<string, string[]> = {

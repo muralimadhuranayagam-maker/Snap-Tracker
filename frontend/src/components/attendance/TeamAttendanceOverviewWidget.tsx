@@ -21,7 +21,7 @@ export function TeamAttendanceOverviewWidget() {
   const { data, isLoading } = useQuery({
     queryKey: ['attendance-overview', selectedDate],
     queryFn: async () => {
-      const res = await api.get('/attendance/overview', {
+      const res = await api.get('/attendance/admin/overview', {
         params: { date: selectedDate },
       });
       return res.data;

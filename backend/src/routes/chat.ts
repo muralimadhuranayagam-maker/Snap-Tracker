@@ -56,22 +56,6 @@ async function verifyChannelAccess(user: any, channel: string) {
   return true;
 }
 
-// ─── ENSURE CHAT READS TRACKING TABLE ────────────────────────────────────────
-async function initChatReadsTable() {
-  try {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS chat_channel_reads (
-        userId TEXT NOT NULL,
-        channel TEXT NOT NULL,
-        lastReadAt TEXT NOT NULL,
-        PRIMARY KEY (userId, channel)
-      )
-    `);
-  } catch (err) {
-    console.error('[CHAT] Failed to ensure chat_channel_reads table:', err);
-  }
-}
-initChatReadsTable();
 
 // ─── GET /api/chat/unread-count ──────────────────────────────────────────────
 // Returns total unread messages count and per-channel breakdown for current user
@@ -81,10 +65,9 @@ router.get('/unread-count', async (req, res, next) => {
     const isSuperAdmin = user.roleName === 'SUPER_ADMIN';
 
     // 1. Get user's recorded read timestamps
-    const readRows: any[] = await prisma.$queryRawUnsafe(
-      `SELECT channel, lastReadAt FROM chat_channel_reads WHERE userId = ?`,
-      user.id
-    );
+    const readRows = await prisma.chatChannelRead.findMany({
+      where: { userId: user.id }
+    });
     const readMap = new Map<string, Date>();
     readRows.forEach((r) => {
       readMap.set(r.channel, new Date(r.lastReadAt));
@@ -159,14 +142,13 @@ router.post('/read', async (req, res, next) => {
     }
 
     const nowIso = new Date().toISOString();
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO chat_channel_reads (userId, channel, lastReadAt)
-       VALUES (?, ?, ?)
-       ON CONFLICT(userId, channel) DO UPDATE SET lastReadAt = excluded.lastReadAt`,
-      user.id,
-      channel,
-      nowIso
-    );
+    await prisma.chatChannelRead.upsert({
+      where: {
+        userId_channel: { userId: user.id, channel }
+      },
+      update: { lastReadAt: nowIso },
+      create: { userId: user.id, channel, lastReadAt: nowIso }
+    });
 
     res.json({ success: true, channel, readAt: nowIso });
   } catch (err) {

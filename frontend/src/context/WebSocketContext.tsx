@@ -52,7 +52,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const defaultHost = `${window.location.hostname}:4000`;
+      const defaultHost = import.meta.env.PROD ? window.location.host : `${window.location.hostname}:4000`;
       const wsUrl = import.meta.env.VITE_WS_URL || `${protocol}//${defaultHost}`;
       const socket = new WebSocket(`${wsUrl}?token=${encodeURIComponent(token)}`);
 
