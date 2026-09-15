@@ -17,7 +17,9 @@ import {
   Check, 
   User as UserIcon,
   Sparkles,
-  UserPlus
+  UserPlus,
+  Key,
+  Copy
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -152,7 +154,28 @@ export function TeamDirectoryPage() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // 1. Fetch Users
+  // Temp Password state
+  const [tempPasswordState, setTempPasswordState] = useState<{ member: any, password: string, expiresAt: number } | null>(null);
+
+  // Generate Temp Password Mutation
+  const tempPasswordMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await api.post(`/users/${userId}/temp-password`);
+      return res.data;
+    },
+    onSuccess: (data, userId) => {
+      const member = users.find((u: any) => u.id === userId);
+      setTempPasswordState({
+        member,
+        password: data.tempPassword,
+        expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutes
+      });
+      toast.success('Temporary password generated!');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Failed to generate temporary password');
+    }
+  });
   const { data: users = [], isLoading, error } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
@@ -494,7 +517,6 @@ export function TeamDirectoryPage() {
                 key={member.id} 
                 className={`team-member-card ${isSelf ? 'is-self' : ''}`}
               >
-                {/* ─── TOP ACTION BAR ─── */}
                 <div className="team-card-header">
                   <div>
                     {isSelf && (
@@ -504,7 +526,23 @@ export function TeamDirectoryPage() {
                     )}
                   </div>
 
-                  <div>
+                  <div className="flex items-center gap-2">
+                    {isSuperAdmin && !isSelf && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Generate a temporary password for ${member.name}?`)) {
+                            tempPasswordMutation.mutate(member.id);
+                          }
+                        }}
+                        className="team-edit-btn"
+                        title="Generate Temporary Password"
+                        disabled={tempPasswordMutation.isPending}
+                      >
+                        <Key size={12} />
+                        <span>Temp Pass</span>
+                      </button>
+                    )}
                     {canEdit && (
                       <button
                         type="button"
@@ -1127,6 +1165,75 @@ export function TeamDirectoryPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* ─── TEMP PASSWORD MODAL ─── */}
+      {tempPasswordState && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            background: 'rgba(0, 0, 0, 0.78)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={() => setTempPasswordState(null)}
+        >
+          <div 
+            style={{
+              width: '100%',
+              maxWidth: '400px',
+              background: '#121216',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '20px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+              padding: '24px',
+              textAlign: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="w-12 h-12 mx-auto bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mb-4">
+              <Key size={24} />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">Temporary Password Generated</h3>
+            <p className="text-sm text-muted mb-6">
+              A temporary password has been generated for <strong>{tempPasswordState.member?.name}</strong>. 
+              They will be required to set a permanent password upon login.
+            </p>
+            
+            <div className="bg-surface border border-subtle rounded-xl p-4 mb-6 flex items-center justify-between">
+              <span className="font-mono text-xl tracking-wider text-white select-all">
+                {tempPasswordState.password}
+              </span>
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(tempPasswordState.password);
+                  toast.success('Password copied to clipboard!');
+                }}
+                className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-accent transition-colors"
+                title="Copy to clipboard"
+              >
+                <Copy size={18} />
+              </button>
+            </div>
+            
+            <p className="text-xs text-amber-400/80 bg-amber-500/10 py-2 px-3 rounded-lg border border-amber-500/20 mb-6">
+              ⚠️ This password is valid for 5 minutes. Please share it securely.
+            </p>
+            
+            <button
+              onClick={() => setTempPasswordState(null)}
+              className="btn btn-primary w-full justify-center py-2.5 rounded-xl font-semibold"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}

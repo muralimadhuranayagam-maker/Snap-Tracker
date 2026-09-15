@@ -291,4 +291,36 @@ router.delete('/:id', requireRole('SUPER_ADMIN'), async (req, res, next) => {
   }
 });
 
+// POST /api/users/:id/temp-password — Super Admin only
+router.post('/:id/temp-password', requireRole('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) throw new AppError('User not found', 404);
+
+    const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-2).toUpperCase() + '!';
+    const hashed = await bcrypt.hash(tempPassword, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashed,
+        mustChangePassword: true,
+      }
+    });
+
+    await createAuditLog({
+      userId: req.user!.id,
+      userEmail: req.user!.email,
+      action: 'TEMP_PASSWORD_GENERATED',
+      entity: 'User',
+      entityId: user.id,
+      req,
+    });
+
+    res.json({ tempPassword });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
