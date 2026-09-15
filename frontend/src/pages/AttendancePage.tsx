@@ -44,7 +44,7 @@ export function AttendancePage() {
   const queryClient = useQueryClient();
 
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
-  const [activeTab, setActiveTab] = useState<'my_attendance' | 'admin_activity'>('my_attendance');
+  const [activeTab, setActiveTab] = useState<'my_attendance' | 'admin_activity'>(isSuperAdmin ? 'admin_activity' : 'my_attendance');
 
   // Shared background camera and face presence session
   const {
