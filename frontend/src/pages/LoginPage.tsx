@@ -32,10 +32,7 @@ export function LoginPage() {
     }
   };
 
-  const autofill = (e: string, p: string) => {
-    setEmail(e);
-    setPassword(p);
-  };
+
 
   return (
     <div className="login-page">
@@ -94,15 +91,7 @@ export function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-subtle">
-          <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-3 text-center">Quick Login (Demo)</div>
-          <div className="grid grid-cols-2 gap-2">
-            <button className="btn btn-secondary btn-sm" onClick={() => autofill('superadmin1@snapserve.io', 'Admin@1234')}>Super Admin</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => autofill('admin1@snapserve.io', 'Admin@1234')}>Admin</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => autofill('rahul.kumar@snapserve.io', 'Employee@1234')}>FDE Employee</button>
-            <button className="btn btn-secondary btn-sm" onClick={() => autofill('david.cohen@snapserve.io', 'Employee@1234')}>Sales Employee</button>
-          </div>
-        </div>
+
       </div>
     </div>
   );
