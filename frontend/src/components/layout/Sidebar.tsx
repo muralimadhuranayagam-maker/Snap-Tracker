@@ -223,7 +223,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="sidebar-user" onClick={() => logout()} title="Click to Logout">
+        <div className="sidebar-user">
           <div className="avatar avatar-md bg-accent">
             {user.avatar ? (
               <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
@@ -237,7 +237,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               {user.role?.replace('_', ' ')} {user.department ? `• ${user.department.code}` : ''}
             </div>
           </div>
-          <LogOut size={14} className="text-muted" />
+          <button 
+            onClick={() => logout()} 
+            title="Click to Logout"
+            className="p-1.5 rounded-md hover:bg-white/10 text-muted hover:text-foreground transition-colors shrink-0 flex items-center justify-center"
+          >
+            <LogOut size={15} />
+          </button>
         </div>
       </div>
     </aside>
