@@ -149,10 +149,23 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/api/attendance', attendanceRoutes); // Fallback for double-prefixed client requests
 app.use('/attendance', attendanceRoutes);
 
-// 404 handler
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+// 404 handler for API routes
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'API Route not found' });
 });
+
+// Serve frontend in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '..', '..', 'frontend', 'dist')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', '..', 'frontend', 'dist', 'index.html'));
+  });
+} else {
+  // 404 handler for non-API routes in development
+  app.use((_req, res) => {
+    res.status(404).json({ error: 'Route not found' });
+  });
+}
 
 // Global error handler
 app.use(errorHandler);
