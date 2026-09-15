@@ -565,24 +565,25 @@ export function TeamDirectoryPage() {
                       className="team-avatar-circle"
                       style={{
                         background: member.avatar ? '#121216' : avatarBg,
+                        position: 'relative'
                       }}
                     >
-                      {member.avatar ? (
+                      {/* Initials fallback always rendered underneath */}
+                      <span style={{ position: 'absolute', zIndex: 1 }}>{initials}</span>
+
+                      {member.avatar && (
                         <img 
                           src={member.avatar} 
                           alt="" 
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', position: 'absolute', zIndex: 2 }}
                           onError={(e) => {
                             e.currentTarget.onerror = null;
                             e.currentTarget.style.display = 'none';
                             if (e.currentTarget.parentElement) {
                               e.currentTarget.parentElement.style.background = avatarBg;
-                              e.currentTarget.parentElement.innerHTML = initials;
                             }
                           }}
                         />
-                      ) : (
-                        initials
                       )}
                     </div>
 
