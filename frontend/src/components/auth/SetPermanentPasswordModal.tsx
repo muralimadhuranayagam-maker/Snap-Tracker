@@ -62,7 +62,8 @@ export function SetPermanentPasswordModal() {
       style={{ 
         backgroundColor: 'rgba(5, 5, 8, 0.88)', 
         backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)'
+        WebkitBackdropFilter: 'blur(12px)',
+        zIndex: 9999
       }}
     >
       <div 

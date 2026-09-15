@@ -78,7 +78,6 @@ function ProtectedLayout() {
 
   return (
     <div className="app-shell">
-      {user?.mustChangePassword && <SetPermanentPasswordModal />}
       <Sidebar isOpen={isMobileNavOpen} onClose={() => setIsMobileNavOpen(false)} />
       <div className="main-content">
         <Header onToggleMobileNav={() => setIsMobileNavOpen(prev => !prev)} />
@@ -86,6 +85,7 @@ function ProtectedLayout() {
           <Outlet />
         </div>
       </div>
+      {user?.mustChangePassword && <SetPermanentPasswordModal />}
     </div>
   );
 }
