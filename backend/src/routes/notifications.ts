@@ -107,6 +107,8 @@ router.post('/viewed', async (req, res, next) => {
       throw new AppError('Valid entity (tasks, tickets, projects) is required', 400);
     }
 
+    const nowIso = new Date().toISOString();
+    
     await prisma.entityLastView.upsert({
       where: {
         userId_entity: { userId: user.id, entity }
