@@ -563,28 +563,17 @@ export function TeamDirectoryPage() {
                   <div className="team-avatar-wrapper">
                     <div 
                       className="team-avatar-circle"
-                      style={{
-                        background: member.avatar ? '#121216' : avatarBg,
-                        position: 'relative'
+                      style={member.avatar ? {
+                        backgroundImage: `url("${member.avatar}")`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        backgroundRepeat: 'no-repeat',
+                        color: 'transparent',     // hide initials text when image loads
+                      } : {
+                        background: avatarBg,
                       }}
                     >
-                      {/* Initials fallback always rendered underneath */}
-                      <span style={{ position: 'absolute', zIndex: 1 }}>{initials}</span>
-
-                      {member.avatar && (
-                        <img 
-                          src={member.avatar} 
-                          alt="" 
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', position: 'absolute', zIndex: 2 }}
-                          onError={(e) => {
-                            e.currentTarget.onerror = null;
-                            e.currentTarget.style.display = 'none';
-                            if (e.currentTarget.parentElement) {
-                              e.currentTarget.parentElement.style.background = avatarBg;
-                            }
-                          }}
-                        />
-                      )}
+                      {initials}
                     </div>
 
                     {/* Online status indicator */}
