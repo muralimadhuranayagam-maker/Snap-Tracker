@@ -280,13 +280,13 @@ export function TeamDirectoryPage() {
     setIsCreateModalOpen(true);
   };
 
-  // Upload Profile Picture for Create User
+  // Upload Profile Picture for Create User — stored as base64 in DB
   const handleCreateAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image size must be less than 10MB');
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
       return;
     }
 
@@ -295,11 +295,11 @@ export function TeamDirectoryPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await api.post('/upload', formData);
+      const res = await api.post('/upload/avatar', formData);
       setCreateForm((prev) => ({ ...prev, avatar: res.data.url }));
       toast.success('Photo uploaded successfully');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to upload photo');
+      toast.error(err.response?.data?.error || err?.error || 'Failed to upload photo');
     } finally {
       setIsUploadingCreatePhoto(false);
       if (createFileInputRef.current) createFileInputRef.current.value = '';
@@ -343,13 +343,13 @@ export function TeamDirectoryPage() {
     });
   };
 
-  // Upload Profile Picture File
+  // Upload Profile Picture File (Edit modal) — stored as base64 in DB
   const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Image size must be less than 10MB');
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
       return;
     }
 
@@ -358,11 +358,11 @@ export function TeamDirectoryPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await api.post('/upload', formData);
+      const res = await api.post('/upload/avatar', formData);
       setEditForm((prev) => ({ ...prev, avatar: res.data.url }));
       toast.success('Photo uploaded! Click "Save Changes" to apply.');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to upload photo');
+      toast.error(err.response?.data?.error || err?.error || 'Failed to upload photo');
     } finally {
       setIsUploadingPhoto(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

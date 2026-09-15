@@ -10,11 +10,15 @@ import { AppError } from '../middleware/errorHandler';
 const router = Router();
 router.use(authenticate);
 
-// Ensure upload directory exists
+// Ensure upload directory exists (for non-image file types)
 const uploadDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-const storage = multer.diskStorage({
+// ── Memory storage: for profile images → returned as base64 data URI, stored in DB ──
+const memoryStorage = multer.memoryStorage();
+
+// ── Disk storage: for all non-image files (PDFs, audio, video, attachments) ──
+const diskStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
     let ext = path.extname(file.originalname);
@@ -51,8 +55,22 @@ const ALLOWED_TYPES = [
   'audio/webm', 'audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/aac', 'audio/m4a', 'audio/mp4', 'audio/x-m4a'
 ];
 
+// Image-only uploader → memory (for profile photos stored as base64 in DB)
+const imageUpload = multer({
+  storage: memoryStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max for profile images
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new AppError('Only image files are allowed for profile photos', 400) as any);
+    }
+  },
+});
+
+// Generic file uploader → disk (for attachments, audio, video, etc.)
 const upload = multer({
-  storage,
+  storage: diskStorage,
   limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE_MB || '100') * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_TYPES.includes(file.mimetype) || file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/') || file.mimetype.startsWith('image/')) {
@@ -63,7 +81,29 @@ const upload = multer({
   },
 });
 
-// POST /api/upload — Generic file / screenshot upload
+// POST /api/upload/avatar — Profile image upload → stored as base64 data URI in DB
+// This endpoint stores images in memory and returns a data URI so the caller can
+// persist it directly in the User.avatar DB column. No filesystem involved.
+router.post('/avatar', imageUpload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) throw new AppError('No file uploaded', 400);
+
+    // Convert buffer → base64 data URI
+    const base64 = req.file.buffer.toString('base64');
+    const dataUri = `data:${req.file.mimetype};base64,${base64}`;
+
+    res.status(201).json({
+      url: dataUri,          // caller stores this directly in User.avatar
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/upload — Generic file / screenshot upload (disk-based, for attachments)
 router.post('/', upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) throw new AppError('No file uploaded', 400);
@@ -76,8 +116,8 @@ router.post('/', upload.single('file'), async (req, res, next) => {
       size: req.file.size,
     });
   } catch (err) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    if (req.file && fs.existsSync((req.file as any).path)) {
+      fs.unlinkSync((req.file as any).path);
     }
     next(err);
   }
