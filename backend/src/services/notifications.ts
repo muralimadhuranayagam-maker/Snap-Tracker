@@ -21,7 +21,10 @@ export type NotificationType =
   | 'DEPENDENCY_ADDED'
   | 'DEPENDENCY_RESOLVED'
   | 'SLA_WARNING'
-  | 'SLA_BREACH';
+  | 'SLA_BREACH'
+  | 'CHAT_MENTION'
+  | 'PROJECT_ASSIGNED'
+  | 'PROJECT_CREATED';
 
 interface CreateNotificationParams {
   userId: string;
@@ -203,3 +206,38 @@ export async function runEscalationChecks() {
     }
   }
 }
+
+export async function notifyProjectAssigned(projectId: string, userId: string, assignerName: string, role = 'MEMBER') {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, name: true }
+  });
+  if (!project) return;
+
+  await createNotification({
+    userId,
+    type: 'PROJECT_ASSIGNED',
+    title: `Assigned to Project: ${project.name}`,
+    message: `${assignerName} added you as a ${role} to project "${project.name}"`,
+    actionUrl: `/projects/${projectId}`,
+  });
+}
+
+export async function notifyProjectCreated(projectId: string, userIds: string[], creatorName: string) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, name: true }
+  });
+  if (!project || userIds.length === 0) return;
+
+  for (const userId of userIds) {
+    await createNotification({
+      userId,
+      type: 'PROJECT_CREATED',
+      title: `New Project: ${project.name}`,
+      message: `${creatorName} created project "${project.name}" in your department`,
+      actionUrl: `/projects/${projectId}`,
+    });
+  }
+}
+

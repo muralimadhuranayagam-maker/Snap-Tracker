@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Sparkles, AlertTriangle, CheckCircle2, Building, Layers, Camera, Upload, Trash2, FileText } from 'lucide-react';
 import { api } from '../../services/api';
@@ -166,11 +167,45 @@ export function RaiseTicketModal({ isOpen, onClose }: RaiseTicketModalProps) {
     });
   };
 
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content max-w-2xl" onClick={e => e.stopPropagation()}>
+  return createPortal(
+    <div 
+      className="modal-overlay animate-in fade-in duration-200" 
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        overflowY: 'auto'
+      }}
+      onClick={onClose}
+    >
+      <div 
+        className="modal-content max-w-2xl my-auto" 
+        style={{ backgroundColor: 'var(--bg-surface)' }}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="modal-header flex items-center justify-between pb-3 border-b border-subtle">
           <div className="flex items-center gap-2">
             <div className="p-2 rounded bg-amber-subtle text-amber">
@@ -462,6 +497,7 @@ export function RaiseTicketModal({ isOpen, onClose }: RaiseTicketModalProps) {
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

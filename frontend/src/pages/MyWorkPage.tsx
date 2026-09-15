@@ -4,13 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { 
   CheckSquare, 
   Ticket, 
-  Sparkles, 
   Clock, 
   AlertTriangle, 
   Calendar, 
   CheckCircle2, 
   ShieldAlert,
-  ArrowRight,
   ExternalLink,
   Hourglass
 } from 'lucide-react';
@@ -51,7 +49,6 @@ export function MyWorkPage() {
   const tickets = data?.tickets || [];
   const approvals = data?.approvals || [];
   const reviews = data?.reviews || [];
-  const aiDailyPlan = data?.aiDailyPlan || [];
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -161,53 +158,6 @@ export function MyWorkPage() {
         </div>
       </div>
 
-      {/* AI Daily Plan Section */}
-      {aiDailyPlan.length > 0 && (
-        <div className="card p-4 bg-purple-subtle/20 border border-purple/30 rounded-xl relative overflow-hidden">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-purple text-white">
-                <Sparkles size={16} />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-primary">AI Daily Work Plan</h3>
-                <p className="text-[11px] text-muted">
-                  Dynamically prioritized according to deadlines, critical milestones, and dependency status.
-                </p>
-              </div>
-            </div>
-            <span className="badge bg-purple/20 text-purple border border-purple/30 text-[10px] font-mono">
-              REAL-TIME PLAN
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {aiDailyPlan.map((planItem: any) => (
-              <div 
-                key={planItem.order}
-                className="p-3 bg-surface/90 border border-subtle rounded-lg flex flex-col justify-between hover:border-purple/50 transition cursor-pointer"
-                onClick={() => {
-                  const targetTask = tasks.find((t: any) => t.taskId === planItem.taskId);
-                  if (targetTask) navigate(`/tasks/${targetTask.id}`);
-                }}
-              >
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-mono text-purple font-semibold">#{planItem.order} {planItem.taskId}</span>
-                    <span className="badge bg-elevated text-[10px] font-medium">{planItem.priority}</span>
-                  </div>
-                  <div className="text-xs font-medium text-primary line-clamp-1">{planItem.title}</div>
-                  <p className="text-[11px] text-secondary mt-1.5 leading-relaxed">{planItem.reason}</p>
-                </div>
-                <div className="mt-2.5 pt-2 border-t border-subtle flex items-center justify-between text-[10px] text-muted">
-                  <span>Est: {planItem.estimatedHours}h</span>
-                  <span className="text-purple flex items-center gap-0.5">Open <ArrowRight size={10} /></span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Main Tabbed Area */}
       <div className="space-y-3">

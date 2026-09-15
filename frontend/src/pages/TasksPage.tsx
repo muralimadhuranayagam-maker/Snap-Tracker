@@ -15,11 +15,14 @@ import {
   Users,
   UserCheck,
   Building,
-  Ticket
+  Ticket,
+  History,
+  FolderKanban
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
+import { RaiseTicketModal } from '../components/tickets/RaiseTicketModal';
 
 export function TasksPage() {
   const { user } = useAuthStore();
@@ -33,6 +36,7 @@ export function TasksPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isRaiseTicketModalOpen, setIsRaiseTicketModalOpen] = useState(false);
 
   // Fetch Tasks with scope
   const { data: rawTasks = [], isLoading } = useQuery({
@@ -66,6 +70,16 @@ export function TasksPage() {
     return matchesSearch && matchesPriority;
   });
 
+  // Column Configuration with Dot Colors and Display Labels
+  const COLUMN_CONFIG: Record<string, { label: string; dotColor: string }> = {
+    BACKLOG: { label: 'BACKLOG', dotColor: '#94a3b8' },      // Slate Gray
+    TODO: { label: 'TODO', dotColor: '#3b82f6' },         // Blue
+    IN_PROGRESS: { label: 'IN PROGRESS', dotColor: '#eab308' }, // Yellow / Amber
+    IN_REVIEW: { label: 'IN REVIEW', dotColor: '#f97316' },   // Orange
+    BLOCKED: { label: 'BLOCKED', dotColor: '#ef4444' },     // Red / Blocker
+    DONE: { label: 'COMPLETED', dotColor: '#22c55e' },      // Green / Completed
+  };
+
   // Kanban Columns
   const kanbanColumns = ['BACKLOG', 'TODO', 'IN_PROGRESS', 'IN_REVIEW', 'BLOCKED', 'DONE'];
   const groupedTasks = kanbanColumns.reduce((acc, status) => {
@@ -91,8 +105,10 @@ export function TasksPage() {
       }
 
       await api.patch(`/tasks/${taskId}`, { statusId: statusObj.id });
-      toast.success(`Task moved to ${destStatus.replace('_', ' ')}`);
+      const displayLabel = COLUMN_CONFIG[destStatus]?.label || destStatus.replace('_', ' ');
+      toast.success(`Task moved to ${displayLabel}`);
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-status-logs'] });
       queryClient.invalidateQueries({ queryKey: ['mywork'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } catch (err: any) {
@@ -165,7 +181,23 @@ export function TasksPage() {
           </div>
 
           <button 
-            className="btn btn-primary btn-sm flex items-center gap-1.5"
+            className="btn btn-secondary btn-sm flex items-center gap-1.5 shadow-sm border border-subtle"
+            onClick={() => navigate('/tasks/logs')}
+            title="View Task Status Logs & Audit Trail"
+          >
+            <History size={14} className="text-accent" /> View Logs
+          </button>
+
+          <button 
+            className="btn btn-secondary btn-sm flex items-center gap-1.5 shadow-sm border border-subtle"
+            onClick={() => setIsRaiseTicketModalOpen(true)}
+            title="Raise a new support ticket"
+          >
+            <Ticket size={14} className="text-amber-400" /> Raise Ticket
+          </button>
+
+          <button 
+            className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm font-semibold"
             onClick={() => setIsCreateModalOpen(true)}
           >
             <Plus size={14} /> Create Task
@@ -227,11 +259,18 @@ export function TasksPage() {
                     <td className="font-mono text-xs font-semibold text-accent">{task.taskId}</td>
                     <td>
                       <div className="font-medium text-primary text-sm">{task.title}</div>
-                      {task.ticket && (
-                        <div className="text-[11px] text-muted flex items-center gap-1 mt-0.5">
-                          <Ticket size={11} className="text-amber" /> From {task.ticket.ticketId}
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {task.project && (
+                          <span className="text-[11px] text-blue-400 font-medium flex items-center gap-1">
+                            <FolderKanban size={11} className="shrink-0" /> {task.project.name}
+                          </span>
+                        )}
+                        {task.ticket && (
+                          <span className="text-[11px] text-muted flex items-center gap-1">
+                            <Ticket size={11} className="text-amber" /> From {task.ticket.ticketId}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>
                       {task.customer ? (
@@ -256,7 +295,7 @@ export function TasksPage() {
                     </td>
                     <td>
                       <span className={`badge badge-status-${task.status?.name?.toLowerCase() || 'backlog'}`}>
-                        {task.status?.name?.replace('_', ' ')}
+                        {COLUMN_CONFIG[task.status?.name || '']?.label || task.status?.name?.replace('_', ' ')}
                       </span>
                     </td>
                     <td>
@@ -293,7 +332,15 @@ export function TasksPage() {
               return (
                 <div key={status} className="kanban-col">
                   <div className="kanban-col-header">
-                    <span className="font-semibold text-xs text-secondary">{status.replace('_', ' ')}</span>
+                    <div className="flex items-center gap-2">
+                      <span 
+                        className="status-dot" 
+                        style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: COLUMN_CONFIG[status]?.dotColor || '#94a3b8' }}
+                      />
+                      <span className="font-semibold text-xs text-secondary">
+                        {COLUMN_CONFIG[status]?.label || status.replace('_', ' ')}
+                      </span>
+                    </div>
                     <span className="kanban-col-count">{columnTasks.length}</span>
                   </div>
                   
@@ -323,9 +370,17 @@ export function TasksPage() {
                                 </div>
                                 <h4 className="text-xs font-semibold text-primary mb-2 line-clamp-2">{task.title}</h4>
                                 
+                                {task.project && (
+                                  <div className="text-[10px] text-blue-400 font-medium flex items-center gap-1 mb-1.5 truncate">
+                                    <FolderKanban size={11} className="shrink-0" />
+                                    <span className="truncate">{task.project.name}</span>
+                                  </div>
+                                )}
+
                                 {task.customer && (
-                                  <div className="text-[10px] text-muted flex items-center gap-1 mb-2">
-                                    <Building size={10} /> {task.customer.name}
+                                  <div className="text-[10px] text-muted flex items-center gap-1 mb-2 truncate">
+                                    <Building size={10} className="shrink-0" />
+                                    <span className="truncate">{task.customer.name}</span>
                                   </div>
                                 )}
 
@@ -368,9 +423,16 @@ export function TasksPage() {
         </DragDropContext>
       )}
 
+      {/* Create Task Modal */}
       <CreateTaskModal 
         isOpen={isCreateModalOpen} 
         onClose={() => setIsCreateModalOpen(false)} 
+      />
+
+      {/* Raise Ticket Modal for Employees */}
+      <RaiseTicketModal
+        isOpen={isRaiseTicketModalOpen}
+        onClose={() => setIsRaiseTicketModalOpen(false)}
       />
     </div>
   );

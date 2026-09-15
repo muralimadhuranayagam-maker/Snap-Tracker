@@ -88,6 +88,7 @@ router.post('/login', async (req, res, next) => {
         avatar: user.avatar,
         title: user.title,
         role: user.role.name,
+        mustChangePassword: user.mustChangePassword ?? false,
         department: user.department ? {
           id: user.department.id,
           name: user.department.name,
@@ -143,6 +144,7 @@ router.get('/me', authenticate, async (req, res, next) => {
       title: user.title,
       phone: user.phone,
       role: user.role.name,
+      mustChangePassword: user.mustChangePassword ?? false,
       department: user.department ? {
         id: user.department.id,
         name: user.department.name,
@@ -171,9 +173,62 @@ router.post('/change-password', authenticate, async (req, res, next) => {
     if (!valid) throw new AppError('Current password is incorrect', 400);
 
     const hashed = await bcrypt.hash(newPassword, parseInt(process.env.BCRYPT_ROUNDS || '12'));
-    await prisma.user.update({ where: { id: user.id }, data: { password: hashed } });
+    await prisma.user.update({ 
+      where: { id: user.id }, 
+      data: { 
+        password: hashed,
+        mustChangePassword: false,
+      } 
+    });
 
-    res.json({ message: 'Password changed successfully' });
+    res.json({ message: 'Password changed successfully', mustChangePassword: false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/auth/set-permanent-password
+router.post('/set-permanent-password', authenticate, async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 8) {
+      throw new AppError('New permanent password must be at least 8 characters long', 400);
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) throw new AppError('User not found', 404);
+
+    if (currentPassword) {
+      const valid = await bcrypt.compare(currentPassword, user.password);
+      if (!valid) throw new AppError('Current temporary password is incorrect', 400);
+    }
+
+    const isSame = await bcrypt.compare(newPassword, user.password);
+    if (isSame) {
+      throw new AppError('New permanent password must be different from your temporary password', 400);
+    }
+
+    const hashed = await bcrypt.hash(newPassword, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashed,
+        mustChangePassword: false,
+      }
+    });
+
+    await createAuditLog({
+      userId: user.id,
+      userEmail: user.email,
+      action: AuditActions.USER_UPDATED,
+      entity: 'User',
+      entityId: user.id,
+      newValue: { event: 'Permanent password set on first login' },
+      req,
+    });
+
+    res.json({ message: 'Permanent password set successfully', mustChangePassword: false });
   } catch (err) {
     next(err);
   }

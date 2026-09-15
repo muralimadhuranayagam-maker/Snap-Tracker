@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -9,11 +10,14 @@ import {
   CheckSquare, 
   Ticket, 
   ArrowRight, 
-  ShieldAlert
+  ShieldAlert,
+  X
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
+import { ProjectTasksModal } from '../components/projects/ProjectTasksModal';
+import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
 
 export function ProjectsPage() {
   const navigate = useNavigate();
@@ -24,6 +28,9 @@ export function ProjectsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<any | null>(null);
+  const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const [createTaskProjectId, setCreateTaskProjectId] = useState<string | undefined>(undefined);
 
   // New Project Form
   const [name, setName] = useState('');
@@ -31,6 +38,15 @@ export function ProjectsPage() {
   const [customerId, setCustomerId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [priority] = useState('HIGH');
+
+  useEffect(() => {
+    if (isCreateModalOpen || selectedProjectForTasks || isCreateTaskModalOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [isCreateModalOpen, selectedProjectForTasks, isCreateTaskModalOpen]);
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects', search, statusFilter],
@@ -152,15 +168,15 @@ export function ProjectsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {projects.map((p: any) => {
-            const completedTasks = p.tasks?.filter((t: any) => t.status?.name === 'DONE').length || 0;
-            const totalTasks = p.tasks?.length || 0;
-            const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+            const totalTasks = p.stats?.total ?? p._count?.tasks ?? (p.tasks?.length || 0);
+            const completedTasks = p.stats?.done ?? p.tasks?.filter((t: any) => t.status?.name === 'DONE').length ?? 0;
+            const progress = p.stats?.progress ?? (totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0);
 
             return (
               <div 
                 key={p.id}
-                className="card p-5 bg-surface border-subtle hover:border-accent/40 transition cursor-pointer flex flex-col justify-between"
-                onClick={() => navigate(`/projects/${p.id}`)}
+                className="card p-5 bg-surface border border-subtle hover:border-accent/40 transition cursor-pointer flex flex-col justify-between group shadow-sm hover:shadow-md"
+                onClick={() => setSelectedProjectForTasks(p)}
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -175,7 +191,10 @@ export function ProjectsPage() {
                   </div>
 
                   <div>
-                    <h3 className="text-base font-semibold text-primary">{p.name}</h3>
+                    <h3 className="text-base font-semibold text-primary group-hover:text-blue-400 transition-colors flex items-center gap-2">
+                      <FolderKanban size={16} className="text-blue-400 shrink-0" />
+                      <span>{p.name}</span>
+                    </h3>
                     <p className="text-xs text-muted mt-1 line-clamp-2">{p.description || 'No description provided.'}</p>
                   </div>
 
@@ -189,33 +208,67 @@ export function ProjectsPage() {
                   {/* Progress Bar */}
                   <div>
                     <div className="flex items-center justify-between text-[11px] text-muted mb-1">
-                      <span>Tasks Progress</span>
-                      <span className="font-mono text-primary">{progress}%</span>
+                      <span>Tasks Progress ({completedTasks}/{totalTasks})</span>
+                      <span className="font-mono text-primary font-bold">{progress}%</span>
                     </div>
                     <div className="w-full h-1.5 bg-elevated rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-accent transition-all duration-300 rounded-full"
-                        style={{ width: `${progress}%` }}
+                        className="h-full transition-all duration-300 rounded-full"
+                        style={{
+                          width: `${progress}%`,
+                          background: progress === 100 ? '#22c55e' : 'linear-gradient(90deg, #3b82f6 0%, #22c55e 100%)'
+                        }}
                       />
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-subtle flex items-center justify-between text-xs text-muted">
-                  <div className="flex items-center gap-3">
-                    <span className="flex items-center gap-1">
-                      <CheckSquare size={13} className="text-accent" />
-                      <span>{totalTasks}</span>
+                  <div className="flex items-center gap-2.5">
+                    <span 
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '3px 9px',
+                        borderRadius: '6px',
+                        fontSize: '11.5px',
+                        fontWeight: 600,
+                        lineHeight: 1.2,
+                        background: 'rgba(59, 130, 246, 0.12)',
+                        color: '#93c5fd',
+                        border: '1px solid rgba(96, 165, 250, 0.3)',
+                        userSelect: 'none',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <CheckSquare size={13} style={{ color: '#60a5fa', flexShrink: 0 }} />
+                      <span>{totalTasks} {totalTasks === 1 ? 'task' : 'tasks'}</span>
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Ticket size={13} className="text-amber" />
-                      <span>{p.tickets?.length || 0}</span>
-                    </span>
+                    {p.tickets && p.tickets.length > 0 && (
+                      <span className="flex items-center gap-1 text-amber text-xs">
+                        <Ticket size={13} />
+                        <span>{p.tickets.length}</span>
+                      </span>
+                    )}
                   </div>
 
-                  <span className="text-accent flex items-center gap-1 text-xs font-medium">
-                    Open <ArrowRight size={12} />
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-blue-400 font-medium transition flex items-center gap-1">
+                      View Tasks <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs text-muted hover:text-primary transition flex items-center gap-0.5 border-l border-subtle pl-2.5"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/projects/${p.id}`);
+                      }}
+                      title="Open full project dashboard"
+                    >
+                      <span>Dashboard</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -224,25 +277,66 @@ export function ProjectsPage() {
       )}
 
       {/* Create Project Modal */}
-      {isCreateModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsCreateModalOpen(false)}>
-          <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
-            <div className="modal-header flex items-center justify-between pb-3 border-b border-subtle">
-              <h3 className="font-semibold text-base text-primary flex items-center gap-2">
-                <FolderKanban size={16} className="text-accent" />
-                Create New Project
-              </h3>
-              <button className="btn-icon btn-ghost" onClick={() => setIsCreateModalOpen(false)}>
-                &times;
+      {isCreateModalOpen && createPortal(
+        <div 
+          className="modal-overlay animate-in fade-in duration-200" 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            overflowY: 'auto'
+          }}
+          onClick={() => setIsCreateModalOpen(false)}
+        >
+          <div 
+            className="bg-surface border border-subtle rounded-2xl shadow-2xl w-full my-auto overflow-hidden" 
+            style={{ 
+              backgroundColor: 'var(--bg-surface)',
+              maxWidth: '640px',
+              width: '100%'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-4.5 border-b border-subtle flex items-center justify-between bg-surface-hover rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-subtle text-blue flex items-center justify-center shrink-0">
+                  <FolderKanban size={18} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-base text-primary">
+                    Create New Project
+                  </h3>
+                  <p className="text-xs text-muted mt-0.5">
+                    Set up cross-departmental initiative & client association
+                  </p>
+                </div>
+              </div>
+              <button 
+                className="text-muted hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-surface" 
+                onClick={() => setIsCreateModalOpen(false)}
+              >
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubmit} className="mt-4 space-y-4">
+            <form onSubmit={handleCreateSubmit} className="p-6 space-y-4">
               <div>
                 <label className="text-xs font-medium text-secondary block mb-1.5">Project Name *</label>
                 <input 
                   type="text" 
-                  className="input w-full text-xs" 
+                  className="input w-full text-sm" 
                   placeholder="e.g. ABC Corp API Integration & Launch"
                   value={name}
                   onChange={e => setName(e.target.value)}
@@ -254,7 +348,7 @@ export function ProjectsPage() {
                 <label className="text-xs font-medium text-secondary block mb-1.5">Description</label>
                 <textarea 
                   rows={3}
-                  className="input w-full text-xs" 
+                  className="input w-full text-sm resize-y" 
                   placeholder="Objectives, deliverables, and scope..."
                   value={description}
                   onChange={e => setDescription(e.target.value)}
@@ -265,7 +359,7 @@ export function ProjectsPage() {
                 <div>
                   <label className="text-xs font-medium text-secondary block mb-1.5">Linked Customer</label>
                   <select 
-                    className="input w-full text-xs"
+                    className="input w-full text-xs py-2"
                     value={customerId}
                     onChange={e => setCustomerId(e.target.value)}
                   >
@@ -279,7 +373,7 @@ export function ProjectsPage() {
                 <div>
                   <label className="text-xs font-medium text-secondary block mb-1.5">Primary Department</label>
                   <select 
-                    className="input w-full text-xs"
+                    className="input w-full text-xs py-2"
                     value={departmentId}
                     onChange={e => setDepartmentId(e.target.value)}
                   >
@@ -291,13 +385,17 @@ export function ProjectsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-subtle">
-                <button type="button" className="btn btn-ghost text-xs" onClick={() => setIsCreateModalOpen(false)}>
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-subtle">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary text-xs px-4 py-2" 
+                  onClick={() => setIsCreateModalOpen(false)}
+                >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
-                  className="btn btn-primary text-xs"
+                  className="btn btn-primary text-xs px-4 py-2 font-medium"
                   disabled={createProjectMutation.isPending}
                 >
                   {createProjectMutation.isPending ? 'Creating...' : 'Create Project'}
@@ -305,7 +403,34 @@ export function ProjectsPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Project Tasks Modal */}
+      {selectedProjectForTasks && (
+        <ProjectTasksModal
+          isOpen={!!selectedProjectForTasks}
+          onClose={() => setSelectedProjectForTasks(null)}
+          project={selectedProjectForTasks}
+          onAddTask={(projId) => {
+            setCreateTaskProjectId(projId);
+            setIsCreateTaskModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Create Task Modal */}
+      {isCreateTaskModalOpen && (
+        <CreateTaskModal
+          isOpen={isCreateTaskModalOpen}
+          onClose={() => {
+            setIsCreateTaskModalOpen(false);
+            setCreateTaskProjectId(undefined);
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+          }}
+          defaultProjectId={createTaskProjectId}
+        />
       )}
     </div>
   );

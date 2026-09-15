@@ -30,12 +30,8 @@ const ADMIN_ALLOWED_TRANSITIONS: Record<string, string[]> = {
   DONE: ['IN_PROGRESS'], // reopen
 };
 
-function validateTransition(currentStatus: string, newStatus: string, roleName: string): boolean {
-  if (roleName === 'SUPER_ADMIN') return true; // Super admin can do anything
-  const allowed = roleName === 'EMPLOYEE'
-    ? EMPLOYEE_ALLOWED_TRANSITIONS[currentStatus] || []
-    : ADMIN_ALLOWED_TRANSITIONS[currentStatus] || [];
-  return allowed.includes(newStatus);
+function validateTransition(_currentStatus: string, _newStatus: string, _roleName: string): boolean {
+  return true; // Allow any task status transition across Kanban workflow
 }
 
 // Generate human-readable task ID (e.g. FDE-1024)
@@ -172,6 +168,85 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// GET /api/tasks/logs/status-history — status change logs for all tasks
+router.get('/logs/status-history', async (req, res, next) => {
+  try {
+    const { search, limit = '200' } = req.query;
+
+    const historyLogs = await prisma.taskHistory.findMany({
+      where: {
+        action: 'STATUS_CHANGED',
+      },
+      include: {
+        task: {
+          select: {
+            id: true,
+            taskId: true,
+            title: true,
+          }
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit as string),
+    });
+
+    const userIds = [...new Set(historyLogs.map(l => l.userId).filter(Boolean))] as string[];
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, name: true, email: true, avatar: true, title: true }
+    });
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    const totalCount = historyLogs.length;
+    const formattedLogs = historyLogs.map((log, index) => {
+      const logSeq = totalCount - index;
+      const logNumber = `LOG-${String(1000 + logSeq).padStart(4, '0')}`;
+      const userInfo = log.userId ? userMap.get(log.userId) : null;
+
+      const oldStatus = log.oldValue || 'UNKNOWN';
+      const newStatus = log.newValue || 'UNKNOWN';
+      const userName = userInfo?.name || 'System User';
+
+      return {
+        id: log.id,
+        logNumber,
+        taskId: log.task?.id || log.taskId,
+        taskDisplayId: log.task?.taskId || 'TASK',
+        taskTitle: log.task?.title || 'Untitled Task',
+        userId: log.userId,
+        userName,
+        userEmail: userInfo?.email || '',
+        userAvatar: userInfo?.avatar || null,
+        userTitle: userInfo?.title || '',
+        action: log.action,
+        oldStatus,
+        newStatus,
+        description: `${userName} changed status of task ${log.task?.taskId || ''} from ${oldStatus.replace('_', ' ')} to ${newStatus === 'DONE' ? 'COMPLETED' : newStatus.replace('_', ' ')}`,
+        createdAt: log.createdAt,
+      };
+    });
+
+    let filteredLogs = formattedLogs;
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      const q = search.toLowerCase();
+      filteredLogs = formattedLogs.filter(l =>
+        l.logNumber.toLowerCase().includes(q) ||
+        l.taskDisplayId.toLowerCase().includes(q) ||
+        l.taskTitle.toLowerCase().includes(q) ||
+        l.userName.toLowerCase().includes(q) ||
+        l.description.toLowerCase().includes(q)
+      );
+    }
+
+    res.json({
+      logs: filteredLogs,
+      total: filteredLogs.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/tasks/:id
 router.get('/:id', async (req, res, next) => {
   try {
@@ -245,12 +320,10 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/tasks
+// POST /api/tasks — Available to all authenticated users
 router.post('/', async (req, res, next) => {
   try {
     const user = req.user!;
-    const isSuperAdmin = user.roleName === 'SUPER_ADMIN';
-    const isAdmin = user.roleName === 'ADMIN';
 
     const {
       title, description, departmentId, projectId, milestoneId,
@@ -260,18 +333,11 @@ router.post('/', async (req, res, next) => {
 
     if (!title) throw new AppError('Task title is required', 400);
 
-    if (assigneeId && !isSuperAdmin && !isAdmin) {
-      throw new AppError('Only Admins and Super Admins can allocate tasks to users', 403);
-    }
-
     // Find department to generate task ID
+    let targetDeptId = departmentId || user.departmentId;
     let deptCode = 'GEN';
-    if (departmentId) {
-      const dept = await prisma.department.findUnique({ where: { id: departmentId } });
-      deptCode = dept?.code || 'GEN';
-    } else if (!isSuperAdmin && !isAdmin) {
-      // Employee tasks default to their department
-      const dept = await prisma.department.findFirst({ where: { id: user.departmentId || '' } });
+    if (targetDeptId) {
+      const dept = await prisma.department.findUnique({ where: { id: targetDeptId } });
       deptCode = dept?.code || 'GEN';
     }
 
@@ -287,13 +353,13 @@ router.post('/', async (req, res, next) => {
         taskId,
         title,
         description,
-        departmentId: departmentId || user.departmentId,
+        departmentId: targetDeptId,
         projectId,
         milestoneId,
         taskTypeId,
         priorityId,
         statusId: statusId || defaultStatus?.id,
-        assigneeId,
+        assigneeId: assigneeId || user.id,
         reporterId: user.id,
         reviewerId,
         startDate: startDate ? new Date(startDate) : null,
@@ -363,17 +429,18 @@ router.patch('/:id', async (req, res, next) => {
 
     if (!task) throw new AppError('Task not found', 404);
 
-    // Check if user has permission to edit this task
-    if (!isSuperAdmin && !isAdmin) {
-      const canEdit = task.assigneeId === user.id || task.reporterId === user.id;
-      if (!canEdit) throw new AppError('You can only edit tasks assigned to or reported by you', 403);
-    }
-
     const {
       title, description, statusId, priorityId, assigneeId, reviewerId,
       dueDate, startDate, estimatedHours, departmentId, projectId, milestoneId,
       taskTypeId,
     } = req.body;
+
+    // Check if user has permission to edit this task
+    if (!isSuperAdmin && !isAdmin) {
+      const isStatusOnlyUpdate = statusId !== undefined;
+      const canEdit = isStatusOnlyUpdate || task.assigneeId === user.id || task.reporterId === user.id;
+      if (!canEdit) throw new AppError('You can only edit tasks assigned to or reported by you', 403);
+    }
 
     const updateData: any = {};
     const historyEntries: Array<{ field: string; oldValue: any; newValue: any; action: string }> = [];
@@ -395,27 +462,7 @@ router.patch('/:id', async (req, res, next) => {
       const newStatus = await prisma.taskStatus.findUnique({ where: { id: statusId } });
       if (!newStatus) throw new AppError('Invalid status', 400);
 
-      const currentStatus = task.status?.name || 'BACKLOG';
-      if (!validateTransition(currentStatus, newStatus.name, user.roleName)) {
-        throw new AppError(
-          `Cannot transition from ${currentStatus} to ${newStatus.name}. You don't have permission for this transition.`,
-          403
-        );
-      }
-
-      // Check: parent task cannot be marked DONE if mandatory subtasks are incomplete
       if (newStatus.name === 'DONE') {
-        const incompleteSubs = await prisma.task.count({
-          where: {
-            parentId: task.id,
-            isDeleted: false,
-            status: { name: { notIn: ['DONE', 'CANCELLED'] } }
-          }
-        });
-        if (incompleteSubs > 0 && !isAdmin && !isSuperAdmin) {
-          throw new AppError(`Cannot mark as DONE: ${incompleteSubs} subtask(s) are still incomplete`, 400);
-        }
-
         updateData.completedAt = new Date();
       }
 

@@ -29,11 +29,14 @@ import customerRoutes from './routes/customers';
 import approvalRoutes from './routes/approvals';
 import myworkRoutes from './routes/mywork';
 import workloadRoutes from './routes/workload';
+import chatRoutes from './routes/chat';
+import attendanceRoutes from './routes/attendance';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 import { setupWebSocket } from './services/websocket';
+import { prisma } from './lib/prisma';
 
 const app = express();
 const server = http.createServer(app);
@@ -79,10 +82,45 @@ app.use(requestLogger);
 // Static file serving for uploads
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
-// Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '1.0.0' });
-});
+// Health check with active database probe
+const healthHandler = async (_req: express.Request, res: express.Response) => {
+  const startTime = Date.now();
+  let dbStatus = 'disconnected';
+  let dbLatency = 0;
+  let dbError: string | null = null;
+
+  try {
+    // Probe database connectivity with a universal ping
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'connected';
+    dbLatency = Date.now() - startTime;
+  } catch (err: any) {
+    dbError = err?.message || 'Database connection probe failed';
+  }
+
+  const isHealthy = dbStatus === 'connected';
+  const statusCode = isHealthy ? 200 : 503;
+
+  res.status(statusCode).json({
+    status: isHealthy ? 'healthy' : 'degraded',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    uptimeSeconds: Math.floor(process.uptime()),
+    database: {
+      status: dbStatus,
+      latencyMs: dbLatency,
+      ...(dbError && { error: dbError }),
+    },
+    system: {
+      memoryUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      nodeVersion: process.version,
+      env: process.env.NODE_ENV || 'development',
+    },
+  });
+};
+
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -106,6 +144,10 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/mywork', myworkRoutes);
 app.use('/api/workload', workloadRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/api/attendance', attendanceRoutes); // Fallback for double-prefixed client requests
+app.use('/attendance', attendanceRoutes);
 
 // 404 handler
 app.use((_req, res) => {

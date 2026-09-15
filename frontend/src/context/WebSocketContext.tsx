@@ -70,10 +70,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
           // React Query Real-Time Invalidation & Live Dispatch
           if (type.startsWith('TASK_')) {
+            queryClient.invalidateQueries({ queryKey: ['sidebar-badges'] });
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
             queryClient.invalidateQueries({ queryKey: ['mywork'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard'] });
             queryClient.invalidateQueries({ queryKey: ['workload'] });
+            queryClient.invalidateQueries({ queryKey: ['task-status-logs'] });
             if (payload?.id) {
               queryClient.invalidateQueries({ queryKey: ['task', payload.id] });
             }
@@ -81,6 +83,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
               queryClient.invalidateQueries({ queryKey: ['task', payload.taskId] });
             }
           } else if (type.startsWith('TICKET_')) {
+            queryClient.invalidateQueries({ queryKey: ['sidebar-badges'] });
             queryClient.invalidateQueries({ queryKey: ['tickets'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard'] });
             queryClient.invalidateQueries({ queryKey: ['mywork'] });
@@ -97,7 +100,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             if (type === 'APPROVAL_REQUESTED') {
               toast(`New approval request: ${payload?.title || 'Approval required'}`, { icon: '📋' });
             }
-          } else if (type.startsWith('NOTIFICATION_')) {
+          } else if (type.startsWith('NOTIFICATION_') || type === 'SIDEBAR_BADGES_UPDATED') {
+            queryClient.invalidateQueries({ queryKey: ['sidebar-badges'] });
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
             queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
             if (type === 'NOTIFICATION_NEW' && payload?.title) {
@@ -107,6 +111,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             queryClient.invalidateQueries({ queryKey: ['workload'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard'] });
           } else if (type.startsWith('PROJECT_')) {
+            queryClient.invalidateQueries({ queryKey: ['sidebar-badges'] });
             queryClient.invalidateQueries({ queryKey: ['projects'] });
             if (payload?.id) {
               queryClient.invalidateQueries({ queryKey: ['project', payload.id] });
@@ -120,6 +125,27 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             queryClient.invalidateQueries({ queryKey: ['users'] });
             queryClient.invalidateQueries({ queryKey: ['team'] });
             queryClient.invalidateQueries({ queryKey: ['departments'] });
+            queryClient.invalidateQueries({ queryKey: ['chat-users'] });
+            queryClient.invalidateQueries({ queryKey: ['chat-channels'] });
+            queryClient.invalidateQueries({ queryKey: ['users-assignees'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+            queryClient.invalidateQueries({ queryKey: ['settings-users'] });
+            queryClient.invalidateQueries({ queryKey: ['search'] });
+          } else if (type.startsWith('CHAT_')) {
+            queryClient.invalidateQueries({ queryKey: ['chat-messages'] });
+            queryClient.invalidateQueries({ queryKey: ['chat-dms'] });
+            queryClient.invalidateQueries({ queryKey: ['chat-unread-count'] });
+            if (type === 'CHAT_MESSAGE_SENT' && payload) {
+              const currentUserId = useAuthStore.getState().user?.id;
+              if (payload.userId !== currentUserId) {
+                const isChatPage = window.location.pathname.startsWith('/chat');
+                if (!isChatPage) {
+                  const senderName = payload.user?.name || 'Someone';
+                  const channelLabel = payload.channel?.startsWith('dm_') ? 'a direct message' : `#${payload.channel}`;
+                  toast(`New message from ${senderName} in ${channelLabel}`, { icon: '💬' });
+                }
+              }
+            }
           } else if (type === 'SETTINGS_UPDATED') {
             queryClient.invalidateQueries({ queryKey: ['settings'] });
           }

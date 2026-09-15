@@ -55,7 +55,7 @@ async function main() {
     'tasks:create', 'tasks:assign', 'tasks:view', 'tasks:reassign', 'tasks:approve',
     'reports:view', 'ai:use', 'ai:advanced', 'users:view',
   ];
-  const employeePerms = ['tasks:view', 'tasks:create', 'projects:view', 'ai:use', 'departments:view', 'users:view'];
+  const employeePerms = ['tasks:view', 'projects:view', 'ai:use', 'departments:view', 'users:view'];
 
   await prisma.rolePermission.deleteMany({});
   for (const perm of superAdminPerms) {

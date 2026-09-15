@@ -17,7 +17,20 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    let ext = path.extname(file.originalname);
+    if (!ext) {
+      if (file.mimetype.startsWith('audio/webm')) ext = '.webm';
+      else if (file.mimetype.startsWith('audio/wav') || file.mimetype.startsWith('audio/x-wav')) ext = '.wav';
+      else if (file.mimetype.startsWith('audio/mp3') || file.mimetype.startsWith('audio/mpeg')) ext = '.mp3';
+      else if (file.mimetype.startsWith('audio/ogg')) ext = '.ogg';
+      else if (file.mimetype.startsWith('audio/mp4') || file.mimetype.startsWith('audio/m4a')) ext = '.m4a';
+      else if (file.mimetype.startsWith('video/webm')) ext = '.webm';
+      else if (file.mimetype.startsWith('video/mp4')) ext = '.mp4';
+      else if (file.mimetype.startsWith('image/png')) ext = '.png';
+      else if (file.mimetype.startsWith('image/jpeg')) ext = '.jpg';
+      else if (file.mimetype.startsWith('image/webp')) ext = '.webp';
+      else ext = '.bin';
+    }
     cb(null, `${uuidv4()}${ext}`);
   },
 });
@@ -30,14 +43,19 @@ const ALLOWED_TYPES = [
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'text/plain', 'text/csv',
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  // Images
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  // Videos
+  'video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska', 'video/ogg', 'video/avi',
+  // Audio & Voice Recordings
+  'audio/webm', 'audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/aac', 'audio/m4a', 'audio/mp4', 'audio/x-m4a'
 ];
 
 const upload = multer({
   storage,
-  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE_MB || '25') * 1024 * 1024 },
+  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE_MB || '100') * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (ALLOWED_TYPES.includes(file.mimetype)) {
+    if (ALLOWED_TYPES.includes(file.mimetype) || file.mimetype.startsWith('audio/') || file.mimetype.startsWith('video/') || file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
       cb(new AppError(`File type ${file.mimetype} is not allowed`, 400) as any);

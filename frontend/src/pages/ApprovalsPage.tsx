@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -7,7 +8,8 @@ import {
   Plus, 
   Hourglass, 
   ShieldCheck, 
-  CheckSquare 
+  CheckSquare,
+  UserCheck
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
@@ -28,6 +30,7 @@ export function ApprovalsPage() {
   const [description, setDescription] = useState('');
   const [type, setType] = useState('TASK_COMPLETION');
   const [taskId, setTaskId] = useState('');
+  const [approverId, setApproverId] = useState('');
 
   const { data: approvals = [], isLoading } = useQuery({
     queryKey: ['approvals'],
@@ -38,6 +41,13 @@ export function ApprovalsPage() {
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks-for-approval'],
     queryFn: () => api.get('/tasks').then(r => r.data?.tasks || r.data?.data || []),
+    enabled: isRequestModalOpen,
+  });
+
+  // Query only Super Admins and Admins for the Approver dropdown
+  const { data: approvers = [], isLoading: isLoadingApprovers } = useQuery({
+    queryKey: ['approvers-for-approval'],
+    queryFn: () => api.get('/approvals/approvers').then(r => r.data),
     enabled: isRequestModalOpen,
   });
 
@@ -66,6 +76,7 @@ export function ApprovalsPage() {
       setTitle('');
       setDescription('');
       setTaskId('');
+      setApproverId('');
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.error || 'Failed to submit approval request');
@@ -75,11 +86,16 @@ export function ApprovalsPage() {
   const handleRequestSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    if (!approverId) {
+      toast.error('Please select an approver (Admin or Super Admin)');
+      return;
+    }
     createApprovalMutation.mutate({
       title,
       description,
       type,
       taskId: taskId || undefined,
+      approverId,
     });
   };
 
@@ -117,7 +133,10 @@ export function ApprovalsPage() {
 
         <button 
           className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm"
-          onClick={() => setIsRequestModalOpen(true)}
+          onClick={() => {
+            setIsRequestModalOpen(true);
+            setApproverId('');
+          }}
         >
           <Plus size={14} />
           <span>Request Approval</span>
@@ -179,88 +198,144 @@ export function ApprovalsPage() {
                   <th className="p-3">Type</th>
                   <th className="p-3">Linked Task</th>
                   <th className="p-3">Requester</th>
+                  <th className="p-3">Assigned Approver</th>
                   <th className="p-3">Status</th>
                   <th className="p-3">Requested</th>
                   {isAdmin && <th className="p-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-subtle">
-                {displayedApprovals.map((a: any) => (
-                  <tr key={a.id} className="hover:bg-elevated/40 transition">
-                    <td className="p-3">
-                      <div className="font-semibold text-primary">{a.title}</div>
-                      {a.description && <div className="text-[11px] text-muted truncate max-w-xs">{a.description}</div>}
-                    </td>
-                    <td className="p-3 text-secondary font-mono text-[11px]">
-                      {a.type.replace('_', ' ')}
-                    </td>
-                    <td className="p-3">
-                      {a.task ? (
-                        <div 
-                          className="flex items-center gap-1 font-mono text-accent hover:underline cursor-pointer"
-                          onClick={() => navigate(`/tasks/${a.task.id}`)}
-                        >
-                          <CheckSquare size={12} />
-                          <span>{a.task.taskId}</span>
-                        </div>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-secondary">{a.requester?.name}</td>
-                    <td className="p-3">
-                      <span className={`badge text-[10px] font-bold ${
-                        a.status === 'APPROVED' ? 'bg-green-subtle text-green' :
-                        a.status === 'REJECTED' ? 'bg-red-subtle text-red' :
-                        'bg-amber-subtle text-amber'
-                      }`}>
-                        {a.status}
-                      </span>
-                    </td>
-                    <td className="p-3 text-secondary">
-                      {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}
-                    </td>
-                    {isAdmin && (
-                      <td className="p-3 text-right">
-                        {a.status === 'PENDING' ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button 
-                              className="btn btn-primary btn-xs flex items-center gap-1 text-green"
-                              onClick={() => decisionMutation.mutate({ id: a.id, decision: 'APPROVED' })}
-                              disabled={decisionMutation.isPending}
-                            >
-                              <CheckCircle2 size={12} />
-                              <span>Approve</span>
-                            </button>
-                            <button 
-                              className="btn btn-secondary btn-xs flex items-center gap-1 text-red"
-                              onClick={() => decisionMutation.mutate({ id: a.id, decision: 'REJECTED' })}
-                              disabled={decisionMutation.isPending}
-                            >
-                              <XCircle size={12} />
-                              <span>Reject</span>
-                            </button>
+                {displayedApprovals.map((a: any) => {
+                  const canDecide = isAdmin && (
+                    user?.role === 'SUPER_ADMIN' || 
+                    a.approverId === user?.id || 
+                    !a.approverId
+                  );
+
+                  return (
+                    <tr key={a.id} className="hover:bg-elevated/40 transition">
+                      <td className="p-3">
+                        <div className="font-semibold text-primary">{a.title}</div>
+                        {a.description && <div className="text-[11px] text-muted truncate max-w-xs">{a.description}</div>}
+                      </td>
+                      <td className="p-3 text-secondary font-mono text-[11px]">
+                        {a.type.replace('_', ' ')}
+                      </td>
+                      <td className="p-3">
+                        {a.task ? (
+                          <div 
+                            className="flex items-center gap-1 font-mono text-accent hover:underline cursor-pointer"
+                            onClick={() => navigate(`/tasks/${a.task.id}`)}
+                          >
+                            <CheckSquare size={12} />
+                            <span>{a.task.taskId}</span>
                           </div>
                         ) : (
-                          <span className="text-[11px] text-muted">
-                            Decided by {a.approver?.name || 'Admin'}
-                          </span>
+                          <span className="text-muted">—</span>
                         )}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="p-3 text-secondary">{a.requester?.name}</td>
+                      <td className="p-3">
+                        {a.approver ? (
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-[10px] font-bold shrink-0">
+                              {a.approver.name?.charAt(0)}
+                            </div>
+                            <span className="font-medium text-foreground">{a.approver.name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted italic">Any Admin</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <span className={`badge text-[10px] font-bold ${
+                          a.status === 'APPROVED' ? 'bg-green-subtle text-green' :
+                          a.status === 'REJECTED' ? 'bg-red-subtle text-red' :
+                          'bg-amber-subtle text-amber'
+                        }`}>
+                          {a.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-secondary">
+                        {formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}
+                      </td>
+                      {isAdmin && (
+                        <td className="p-3 text-right">
+                          {a.status === 'PENDING' ? (
+                            canDecide ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button 
+                                  className="btn btn-primary btn-xs flex items-center gap-1 text-green"
+                                  onClick={() => decisionMutation.mutate({ id: a.id, decision: 'APPROVED' })}
+                                  disabled={decisionMutation.isPending}
+                                >
+                                  <CheckCircle2 size={12} />
+                                  <span>Approve</span>
+                                </button>
+                                <button 
+                                  className="btn btn-secondary btn-xs flex items-center gap-1 text-red"
+                                  onClick={() => decisionMutation.mutate({ id: a.id, decision: 'REJECTED' })}
+                                  disabled={decisionMutation.isPending}
+                                >
+                                  <XCircle size={12} />
+                                  <span>Reject</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-muted italic">
+                                Assigned to {a.approver?.name || 'another Admin'}
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-[11px] text-muted">
+                              Decided by {a.approver?.name || 'Admin'}
+                            </span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* Request Approval Modal */}
-      {isRequestModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsRequestModalOpen(false)}>
-          <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
-            <div className="modal-header flex items-center justify-between pb-3 border-b border-subtle">
+      {/* Request Approval Modal with createPortal for seamless full-screen backdrop blur */}
+      {isRequestModalOpen && createPortal(
+        <div 
+          className="modal-overlay animate-in fade-in duration-200" 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            overflowY: 'auto'
+          }}
+          onClick={() => setIsRequestModalOpen(false)}
+        >
+          <div 
+            className="bg-surface border border-subtle rounded-2xl shadow-2xl w-full my-auto overflow-hidden animate-in zoom-in-95 duration-200" 
+            style={{ 
+              backgroundColor: 'var(--bg-surface)',
+              maxWidth: '560px',
+              width: '100%'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-subtle flex items-center justify-between bg-surface-hover">
               <h3 className="font-semibold text-base text-primary flex items-center gap-2">
                 <Hourglass size={16} className="text-accent" />
                 Submit Approval Request
@@ -270,7 +345,7 @@ export function ApprovalsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleRequestSubmit} className="mt-4 space-y-4">
+            <form onSubmit={handleRequestSubmit} className="p-6 space-y-4">
               <div>
                 <label className="text-xs font-medium text-secondary block mb-1.5">Request Title *</label>
                 <input 
@@ -281,6 +356,35 @@ export function ApprovalsPage() {
                   onChange={e => setTitle(e.target.value)}
                   required
                 />
+              </div>
+
+              {/* Select Member (Super Admin and Admin only) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-secondary flex items-center gap-1.5">
+                    <UserCheck size={13} className="text-indigo-400" />
+                    Send Request To (Approver) *
+                  </label>
+                  <span className="text-[10px] text-muted font-normal">
+                    Admins & Super Admins only
+                  </span>
+                </div>
+                <select
+                  className="input w-full text-xs"
+                  value={approverId}
+                  onChange={e => setApproverId(e.target.value)}
+                  required
+                >
+                  <option value="">Select an Admin or Super Admin...</option>
+                  {approvers.map((admin: any) => (
+                    <option key={admin.id} value={admin.id}>
+                      {admin.name} ({admin.role?.name === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}) {admin.title ? `— ${admin.title}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {isLoadingApprovers && (
+                  <div className="text-[10px] text-muted mt-1">Loading available approvers...</div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -318,7 +422,7 @@ export function ApprovalsPage() {
                 <label className="text-xs font-medium text-secondary block mb-1.5">Rationale & Notes</label>
                 <textarea 
                   rows={3}
-                  className="input w-full text-xs"
+                  className="input w-full text-xs" 
                   placeholder="Provide verification details, PR links, test coverage, or business reasons..."
                   value={description}
                   onChange={e => setDescription(e.target.value)}
@@ -339,7 +443,8 @@ export function ApprovalsPage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

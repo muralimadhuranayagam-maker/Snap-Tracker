@@ -138,65 +138,96 @@ export function CustomersPage() {
           No customer accounts found.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {customers.map((c: any) => (
-            <div 
-              key={c.id}
-              className="card p-5 bg-surface border-subtle hover:border-accent/40 transition cursor-pointer flex flex-col justify-between"
-              onClick={() => navigate(`/customers/${c.id}`)}
-            >
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="badge bg-green-subtle text-green text-[10px] font-mono">
-                    {c.code}
-                  </span>
-                  <span className="badge bg-elevated text-[10px]">{c.tier}</span>
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {customers.map((c: any) => {
+            const healthColor = c.healthScore >= 80 ? '#4ade80' : c.healthScore >= 60 ? '#fbbf24' : '#f87171';
+            const tierBadgeClass = 
+              c.tier?.toUpperCase() === 'ENTERPRISE' 
+                ? 'customer-tier-badge customer-tier-enterprise'
+                : c.tier?.toUpperCase() === 'GROWTH'
+                ? 'customer-tier-badge customer-tier-growth'
+                : 'customer-tier-badge customer-tier-standard';
 
+            return (
+              <div 
+                key={c.id}
+                className="customer-card"
+                onClick={() => navigate(`/customers/${c.id}`)}
+              >
                 <div>
-                  <h3 className="text-base font-semibold text-primary">{c.name}</h3>
-                  <p className="text-xs text-muted mt-0.5">{c.industry || 'Enterprise Technology'}</p>
-                </div>
-
-                {/* Health Score & ARR */}
-                <div className="p-2.5 rounded-lg bg-elevated/60 border border-subtle flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-[10px] text-muted block">Account Health</span>
-                    <span className="font-bold text-green">{c.healthScore}%</span>
+                  {/* Top Bar: Code & Tier Badges */}
+                  <div className="customer-card-header">
+                    <span className="customer-code-badge">
+                      {c.code}
+                    </span>
+                    <span className={tierBadgeClass}>
+                      {c.tier || 'STANDARD'}
+                    </span>
                   </div>
-                  {c.arr && (
-                    <div className="text-right">
-                      <span className="text-[10px] text-muted block">ARR</span>
-                      <span className="font-mono font-semibold text-primary">
-                        ${(c.arr / 1000).toFixed(0)}k
-                      </span>
+
+                  {/* Company Name & Industry */}
+                  <div className="customer-card-body">
+                    <h3 className="customer-company-name">{c.name}</h3>
+                    <p className="customer-industry-text">
+                      {c.industry || 'Enterprise Technology'}
+                    </p>
+                  </div>
+
+                  {/* Health Score & ARR Metric Panel */}
+                  <div className="customer-metrics-panel">
+                    <div className="customer-metric-col">
+                      <div className="customer-metric-label">Account Health</div>
+                      <div className="customer-metric-val" style={{ color: healthColor }}>
+                        <span 
+                          style={{ 
+                            width: 7, 
+                            height: 7, 
+                            borderRadius: '50%', 
+                            backgroundColor: healthColor,
+                            display: 'inline-block',
+                            boxShadow: `0 0 6px ${healthColor}` 
+                          }} 
+                        />
+                        <span>{c.healthScore}%</span>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
 
-              <div className="mt-4 pt-3 border-t border-subtle flex items-center justify-between text-xs text-muted">
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1" title="Projects">
-                    <FolderKanban size={13} className="text-blue" />
-                    <span>{c._count?.projects || 0}</span>
-                  </span>
-                  <span className="flex items-center gap-1" title="Tickets">
-                    <Ticket size={13} className="text-amber" />
-                    <span>{c._count?.tickets || 0}</span>
-                  </span>
-                  <span className="flex items-center gap-1" title="Tasks">
-                    <CheckSquare size={13} className="text-accent" />
-                    <span>{c._count?.tasks || 0}</span>
-                  </span>
+                    <div className="customer-metric-divider" />
+
+                    <div className="customer-metric-col" style={{ alignItems: 'flex-end', textAlign: 'right' }}>
+                      <div className="customer-metric-label">Annual ARR</div>
+                      <div className="customer-metric-val font-mono font-bold" style={{ color: '#ffffff' }}>
+                        {c.arr ? `$${(c.arr / 1000).toFixed(0)}k` : '$0'}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <span className="text-accent flex items-center gap-1 text-xs font-medium">
-                  Details <ArrowRight size={12} />
-                </span>
+                {/* Card Footer: Metrics & Details Action */}
+                <div className="customer-card-footer">
+                  <div className="customer-counts-group">
+                    <span className="customer-count-chip" title={`${c._count?.projects || 0} Projects`}>
+                      <FolderKanban size={13} style={{ color: '#60a5fa' }} />
+                      <span>{c._count?.projects || 0}</span>
+                    </span>
+                    <span className="customer-count-chip" title={`${c._count?.tickets || 0} Tickets`}>
+                      <Ticket size={13} style={{ color: '#fbbf24' }} />
+                      <span>{c._count?.tickets || 0}</span>
+                    </span>
+                    <span className="customer-count-chip" title={`${c._count?.tasks || 0} Tasks`}>
+                      <CheckSquare size={13} style={{ color: '#c084fc' }} />
+                      <span>{c._count?.tasks || 0}</span>
+                    </span>
+                  </div>
+
+                  <span className="customer-details-btn">
+                    <span>Details</span>
+                    <ArrowRight size={12} />
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

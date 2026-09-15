@@ -4,6 +4,7 @@ import { authenticate, requireAdminOrAbove } from '../middleware/auth';
 import { createAuditLog } from '../services/audit';
 import { AppError } from '../middleware/errorHandler';
 import { broadcast, WSEventTypes } from '../services/websocket';
+import { notifyProjectAssigned, notifyProjectCreated } from '../services/notifications';
 
 const router = Router();
 router.use(authenticate);
@@ -36,13 +37,27 @@ router.get('/', async (req, res, next) => {
       where,
       include: {
         department: { select: { id: true, name: true, code: true, color: true } },
+        customer: { select: { id: true, name: true, code: true } },
         members: {
           include: { user: { select: { id: true, name: true, avatar: true } } }
         },
         milestones: { orderBy: { order: 'asc' } },
+        tasks: {
+          where: { isDeleted: false },
+          include: {
+            status: true,
+            priority: true,
+            assignee: { select: { id: true, name: true, avatar: true, email: true } },
+          },
+          orderBy: [{ priority: { level: 'desc' } }, { dueDate: 'asc' }]
+        },
+        tickets: {
+          select: { id: true, ticketId: true, title: true, priority: true, status: true }
+        },
         _count: {
           select: {
-            tasks: { where: { isDeleted: false } }
+            tasks: { where: { isDeleted: false } },
+            tickets: true,
           }
         }
       },
@@ -50,19 +65,17 @@ router.get('/', async (req, res, next) => {
     });
 
     // Enrich with task stats
-    const enriched = await Promise.all(projects.map(async (p) => {
-      const [total, done, overdue, blocked] = await Promise.all([
-        prisma.task.count({ where: { projectId: p.id, isDeleted: false } }),
-        prisma.task.count({ where: { projectId: p.id, isDeleted: false, status: { name: 'DONE' } } }),
-        prisma.task.count({ where: { projectId: p.id, isDeleted: false, dueDate: { lt: new Date() }, status: { name: { notIn: ['DONE', 'CANCELLED'] } } } }),
-        prisma.task.count({ where: { projectId: p.id, isDeleted: false, status: { name: 'BLOCKED' } } }),
-      ]);
+    const enriched = projects.map((p) => {
+      const total = p.tasks.length;
+      const done = p.tasks.filter((t: any) => t.status?.name === 'DONE').length;
+      const blocked = p.tasks.filter((t: any) => t.status?.name === 'BLOCKED').length;
+      const overdue = p.tasks.filter((t: any) => t.dueDate && new Date(t.dueDate) < new Date() && !['DONE', 'CANCELLED'].includes(t.status?.name)).length;
 
       return {
         ...p,
         stats: { total, done, overdue, blocked, progress: total > 0 ? Math.round((done / total) * 100) : 0 }
       };
-    }));
+    });
 
     res.json(enriched);
   } catch (err) {
@@ -77,6 +90,13 @@ router.get('/:id', async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         department: true,
+        customer: true,
+        tickets: {
+          include: {
+            assignee: { select: { id: true, name: true, avatar: true } }
+          },
+          orderBy: { createdAt: 'desc' }
+        },
         members: {
           include: { user: { select: { id: true, name: true, email: true, avatar: true, title: true, role: { select: { name: true } } } } }
         },
@@ -87,24 +107,21 @@ router.get('/:id', async (req, res, next) => {
 
     if (!project) throw new AppError('Project not found', 404);
 
-    const [tasks, taskStats] = await Promise.all([
-      prisma.task.findMany({
-        where: { projectId: project.id, isDeleted: false, parentId: null },
-        include: {
-          status: true, priority: true,
-          assignee: { select: { id: true, name: true, avatar: true } }
-        },
-        orderBy: [{ priority: { level: 'desc' } }, { dueDate: 'asc' }]
-      }),
-      Promise.all([
-        prisma.task.count({ where: { projectId: project.id, isDeleted: false } }),
-        prisma.task.count({ where: { projectId: project.id, isDeleted: false, status: { name: 'DONE' } } }),
-        prisma.task.count({ where: { projectId: project.id, isDeleted: false, dueDate: { lt: new Date() }, status: { name: { notIn: ['DONE', 'CANCELLED'] } } } }),
-        prisma.task.count({ where: { projectId: project.id, isDeleted: false, status: { name: 'BLOCKED' } } }),
-      ])
-    ]);
+    const tasks = await prisma.task.findMany({
+      where: { projectId: project.id, isDeleted: false },
+      include: {
+        status: true,
+        priority: true,
+        assignee: { select: { id: true, name: true, avatar: true, email: true, title: true } },
+        customer: { select: { id: true, name: true } },
+      },
+      orderBy: [{ priority: { level: 'desc' } }, { dueDate: 'asc' }]
+    });
 
-    const [total, done, overdue, blocked] = taskStats;
+    const total = tasks.length;
+    const done = tasks.filter(t => t.status?.name === 'DONE').length;
+    const blocked = tasks.filter(t => t.status?.name === 'BLOCKED').length;
+    const overdue = tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && !['DONE', 'CANCELLED'].includes(t.status?.name || '')).length;
 
     const { assessProjectHealth } = await import('../services/ai');
     const health = await assessProjectHealth(project.id);
@@ -154,6 +171,17 @@ router.post('/', requireAdminOrAbove, async (req, res, next) => {
       req,
     });
 
+    // Notify department members if department assigned
+    if (departmentId) {
+      const deptUsers = await prisma.user.findMany({
+        where: { departmentId, id: { not: req.user!.id }, isActive: true },
+        select: { id: true }
+      });
+      if (deptUsers.length > 0) {
+        await notifyProjectCreated(project.id, deptUsers.map(u => u.id), req.user!.name);
+      }
+    }
+
     broadcast({ type: WSEventTypes.PROJECT_CREATED, payload: project });
 
     res.status(201).json(project);
@@ -192,6 +220,10 @@ router.post('/:id/members', requireAdminOrAbove, async (req, res, next) => {
       create: { projectId: req.params.id, userId, role },
       update: { role },
     });
+
+    if (userId && userId !== req.user!.id) {
+      await notifyProjectAssigned(req.params.id, userId, req.user!.name, role);
+    }
 
     broadcast({ type: WSEventTypes.PROJECT_UPDATED, payload: { id: req.params.id, member } });
 

@@ -71,6 +71,7 @@ model User {
   lastLoginAt    DateTime?
   passwordResetToken String?
   passwordResetExpiry DateTime?
+  mustChangePassword Boolean   @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -102,6 +103,13 @@ model User {
   aiRecommendationFeedback AIRecommendationFeedback[]
   savedFilters   SavedFilter[]
   sessions       UserSession[]
+  chatMessages   ChatMessage[] @relation("UserSentChatMessages")
+  receivedDirectMessages ChatMessage[] @relation("UserReceivedDirectMessages")
+  attendanceRecords AttendanceRecord[]
+  activitySummaries EmployeeActivitySummary[]
+  attendanceEvents  AttendanceEvent[]
+  webrtcSessions    WebRTCSession[]
+  taskHistories     TaskHistory[]
 
   @@index([email])
   @@index([departmentId])
@@ -419,8 +427,10 @@ model TaskHistory {
   createdAt DateTime @default(now())
 
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([taskId])
+  @@index([userId])
   @@index([createdAt])
 }
 
@@ -811,3 +821,158 @@ model Approval {
   @@index([requesterId])
   @@index([approverId])
 }
+
+// ─── TEAM LIVE CHAT ─────────────────────────────────────────────────────────
+
+model ChatMessage {
+  id            String    @id @default(uuid())
+  userId        String
+  recipientId   String?
+  content       String    @default("")
+  channel       String    @default("general")
+  mediaUrl      String?
+  mediaType     String?   // IMAGE, VIDEO, AUDIO, FILE
+  mediaName     String?
+  mediaSize     Int?
+  mediaDuration Float?
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation("UserSentChatMessages", fields: [userId], references: [id], onDelete: Cascade)
+  recipient     User?     @relation("UserReceivedDirectMessages", fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([channel])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([recipientId])
+}
+
+// ─── ATTENDANCE & WEBRTC PRESENCE MONITORING ───────────────────────────────
+
+model AttendanceRecord {
+  id                      String               @id @default(uuid())
+  userId                  String
+  date                    String               // YYYY-MM-DD
+  status                  String               @default("PRESENT") // PRESENT, ABSENT, HALF_DAY
+  currentState            String               @default("ATTENDANCE_MARKED") // OFF_DUTY, ATTENDANCE_MARKED, WORKING, FACE_NOT_DETECTED, ON_BREAK, ON_LUNCH, WORKDAY_COMPLETED
+  clockIn                 DateTime?
+  clockOut                DateTime?
+  attendanceMarkedAt      DateTime             @default(now())
+  workStartedAt           DateTime?
+  workEndedAt             DateTime?
+  lastFaceDetectedAt      DateTime?
+  lastFaceLostAt          DateTime?
+  totalAttendanceSeconds  Int                  @default(0)
+  verifiedWorkingSeconds  Int                  @default(0)
+  breakSeconds            Int                  @default(0)
+  lunchSeconds            Int                  @default(0)
+  meetingSeconds          Int                  @default(0)
+  faceMissingSeconds      Int                  @default(0)
+  isCompleted             Boolean              @default(false)
+  notes                   String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  user                    User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  intervals               AttendanceInterval[]
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@index([date])
+  @@index([status])
+  @@index([currentState])
+}
+
+model AttendanceInterval {
+  id                  String           @id @default(uuid())
+  attendanceRecordId  String
+  type                String           // WORK, BREAK, LUNCH
+  startedAt           DateTime         @default(now())
+  endedAt             DateTime?
+  durationSeconds     Int              @default(0)
+  faceVerifiedSeconds Int              @default(0)
+  faceMissingSeconds  Int              @default(0)
+  status              String           @default("ACTIVE") // ACTIVE, CLOSED
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  attendanceRecord    AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+
+  @@index([attendanceRecordId])
+  @@index([type])
+  @@index([status])
+}
+
+model EmployeeActivitySummary {
+  id                     String    @id @default(uuid())
+  userId                 String
+  date                   String    // YYYY-MM-DD
+  mouseActiveSeconds     Int       @default(0)
+  keyboardActiveSeconds  Int       @default(0)
+  idleSeconds            Int       @default(0)
+  mouseEventCount        Int       @default(0)
+  mouseClickCount        Int       @default(0)
+  scrollCount            Int       @default(0)
+  keyboardEventCount     Int       @default(0)
+  lastActivityAt         DateTime  @default(now())
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@index([date])
+}
+
+model AttendanceEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  date      String   // YYYY-MM-DD
+  type      String   // ATTENDANCE_MARKED, WORK_STARTED, FACE_DETECTED, FACE_NOT_DETECTED, BREAK_STARTED, BREAK_ENDED, LUNCH_STARTED, LUNCH_ENDED, WORK_RESUMED, WORK_ENDED, WORKDAY_COMPLETED
+  timestamp DateTime @default(now())
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([type])
+  @@index([timestamp])
+}
+
+model WebRTCSession {
+  id              String    @id @default(uuid())
+  userId          String
+  peerId          String?
+  sessionType     String    @default("DATACHANNEL_PRESENCE") // DATACHANNEL_PRESENCE, VIDEO_CHECKIN
+  status          String    @default("ACTIVE") // ACTIVE, DISCONNECTED, ENDED
+  startedAt       DateTime  @default(now())
+  lastHeartbeatAt DateTime  @default(now())
+  endedAt         DateTime?
+  durationSeconds Int       @default(0)
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model ChatChannelRead {
+  userId     String
+  channel    String
+  lastReadAt String
+
+  @@id([userId, channel])
+  @@map("chat_channel_reads")
+}
+
+model EntityLastView {
+  userId       String
+  entity       String
+  lastViewedAt String
+
+  @@id([userId, entity])
+  @@map("entity_last_views")
+}
+
+

@@ -25,17 +25,20 @@ import {
   Search,
   Gauge,
   Timer,
-  CornerDownRight
+  CornerDownRight,
+  Ticket
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
+import { RaiseTicketModal } from '../components/tickets/RaiseTicketModal';
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isRaiseTicketModalOpen, setIsRaiseTicketModalOpen] = useState(false);
 
   // For Admin Quick Allocation
   const [allocatingTaskId, setAllocatingTaskId] = useState<string | null>(null);
@@ -213,10 +216,10 @@ export function DashboardPage() {
     <div className="flex flex-col gap-6 pb-12">
       
       {/* ── Role & Department Persona Banner ────────────────────────────── */}
-      <div className="card p-6 bg-gradient-to-r from-surface to-surface-hover border-subtle relative overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
+      <div className="card p-6 bg-gradient-to-r from-surface to-surface-hover border-subtle relative overflow-hidden shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
               {isSuperAdmin && (
                 <span className="badge bg-amber-subtle text-amber border border-amber/30 flex items-center gap-1 font-semibold text-xs py-0.5 px-2">
                   <Shield size={12} /> Super Admin Cockpit
@@ -259,13 +262,21 @@ export function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center ml-auto">
             <button 
-              className="btn btn-primary shadow-sm flex items-center gap-2"
+              className="btn btn-secondary shadow-sm flex items-center gap-2 border border-subtle text-xs"
+              onClick={() => setIsRaiseTicketModalOpen(true)}
+            >
+              <Ticket size={15} className="text-amber-400" />
+              <span>Raise a Ticket</span>
+            </button>
+
+            <button 
+              className="btn btn-primary shadow-sm flex items-center gap-2 text-xs font-semibold"
               onClick={() => setIsCreateModalOpen(true)}
             >
               <PlusCircle size={16} />
-              {isEmployee ? 'Raise an Issue' : 'Create & Allocate'}
+              <span>Create Task</span>
             </button>
             {isAdminOrSuper && (
               <a href="/reports" className="btn btn-secondary flex items-center gap-1.5">
@@ -410,6 +421,11 @@ export function DashboardPage() {
                 </a>
               </div>
             </div>
+          </div>
+
+          {/* ── Team Attendance & Daily Activity Roster (Camera Verification & Evening Logoff) ── */}
+          <div className="mb-6">
+            <TeamAttendanceOverviewWidget />
           </div>
 
           {/* ── Active Tasks & Delivery Velocity Cockpit ────────────────── */}
@@ -851,6 +867,11 @@ export function DashboardPage() {
               )}
             </div>
           </div>
+
+          {/* ── Team Attendance & Daily Activity Roster (Camera Verification & Evening Logoff) ── */}
+          <div className="mt-6">
+            <TeamAttendanceOverviewWidget />
+          </div>
         </>
       )}
 
@@ -1008,9 +1029,9 @@ export function DashboardPage() {
                 </h3>
                 <button 
                   className="btn btn-primary btn-sm text-xs"
-                  onClick={() => setIsCreateModalOpen(true)}
+                  onClick={() => setIsRaiseTicketModalOpen(true)}
                 >
-                  <PlusCircle size={12} /> Raise Client Blocker
+                  <PlusCircle size={12} /> Raise Client Ticket
                 </button>
               </div>
               <div className="card-body p-0">
@@ -1106,9 +1127,9 @@ export function DashboardPage() {
                 </h3>
                 <button 
                   className="btn btn-primary btn-sm text-xs"
-                  onClick={() => setIsCreateModalOpen(true)}
+                  onClick={() => setIsRaiseTicketModalOpen(true)}
                 >
-                  <PlusCircle size={12} /> Submit Campaign Request
+                  <PlusCircle size={12} /> Submit Campaign Ticket
                 </button>
               </div>
               <div className="card-body p-0">
@@ -1226,12 +1247,16 @@ export function DashboardPage() {
         </>
       )}
 
-      {/* Interactive Modal */}
+      {/* Interactive Modals */}
       <CreateTaskModal 
         isOpen={isCreateModalOpen} 
         onClose={() => setIsCreateModalOpen(false)} 
       />
 
+      <RaiseTicketModal 
+        isOpen={isRaiseTicketModalOpen} 
+        onClose={() => setIsRaiseTicketModalOpen(false)} 
+      />
     </div>
   );
 }

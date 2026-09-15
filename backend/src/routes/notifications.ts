@@ -7,6 +7,183 @@ import { broadcastToUser, WSEventTypes } from '../services/websocket';
 const router = Router();
 router.use(authenticate);
 
+// ─── ENSURE ENTITY VIEWS TABLE ──────────────────────────────────────────────
+async function initEntityViewsTable() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS entity_last_views (
+        userId TEXT NOT NULL,
+        entity TEXT NOT NULL,
+        lastViewedAt TEXT NOT NULL,
+        PRIMARY KEY (userId, entity)
+      )
+    `);
+  } catch (err) {
+    console.error('[NOTIFICATIONS] Failed to ensure entity_last_views table:', err);
+  }
+}
+initEntityViewsTable();
+
+// GET /api/notifications/sidebar-badges
+router.get('/sidebar-badges', async (req, res, next) => {
+  try {
+    const user = req.user!;
+
+    // 1. Get user's recorded read timestamps
+    let viewRows: any[] = [];
+    try {
+      viewRows = await prisma.$queryRawUnsafe(
+        `SELECT entity, lastViewedAt FROM entity_last_views WHERE userId = ?`,
+        user.id
+      );
+    } catch {
+      await initEntityViewsTable();
+    }
+    const viewMap = new Map<string, string>();
+    viewRows.forEach((r) => {
+      viewMap.set(r.entity, r.lastViewedAt);
+    });
+
+    const tasksViewedAt = viewMap.get('tasks');
+    const ticketsViewedAt = viewMap.get('tickets');
+    const projectsViewedAt = viewMap.get('projects');
+
+    // Tasks Badge Count:
+    const unreadTaskNotifs = await prisma.notification.count({
+      where: {
+        userId: user.id,
+        isRead: false,
+        type: { in: ['TASK_ASSIGNED', 'TASK_REASSIGNED', 'TASK_MENTIONED'] }
+      }
+    });
+    let tasksAfterViewed = 0;
+    if (tasksViewedAt) {
+      tasksAfterViewed = await prisma.task.count({
+        where: {
+          assigneeId: user.id,
+          isDeleted: false,
+          createdAt: { gt: new Date(tasksViewedAt) }
+        }
+      });
+    }
+    const tasksCount = Math.max(unreadTaskNotifs, tasksAfterViewed);
+
+    // Tickets Badge Count:
+    const unreadTicketNotifs = await prisma.notification.count({
+      where: {
+        userId: user.id,
+        isRead: false,
+        type: { in: ['TICKET_ASSIGNED', 'TICKET_CREATED'] }
+      }
+    });
+    let ticketsAfterViewed = 0;
+    if (ticketsViewedAt) {
+      ticketsAfterViewed = await prisma.ticket.count({
+        where: {
+          assigneeId: user.id,
+          status: { notIn: ['CLOSED', 'RESOLVED'] },
+          createdAt: { gt: new Date(ticketsViewedAt) }
+        }
+      });
+    }
+    const ticketsCount = Math.max(unreadTicketNotifs, ticketsAfterViewed);
+
+    // Projects Badge Count:
+    const unreadProjectNotifs = await prisma.notification.count({
+      where: {
+        userId: user.id,
+        isRead: false,
+        type: { in: ['PROJECT_ASSIGNED', 'PROJECT_CREATED'] }
+      }
+    });
+    let projectsAfterViewed = 0;
+    if (projectsViewedAt) {
+      projectsAfterViewed = await prisma.project.count({
+        where: {
+          isArchived: false,
+          createdAt: { gt: new Date(projectsViewedAt) },
+          OR: [
+            { members: { some: { userId: user.id } } },
+            ...(user.departmentId ? [{ departmentId: user.departmentId }] : [])
+          ]
+        }
+      });
+    }
+    const projectsCount = Math.max(unreadProjectNotifs, projectsAfterViewed);
+
+    res.json({
+      tasks: tasksCount,
+      tickets: ticketsCount,
+      projects: projectsCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/notifications/viewed
+router.post('/viewed', async (req, res, next) => {
+  try {
+    const user = req.user!;
+    const { entity } = req.body;
+
+    if (!entity || !['tasks', 'tickets', 'projects'].includes(entity)) {
+      throw new AppError('Valid entity (tasks, tickets, projects) is required', 400);
+    }
+
+    const nowIso = new Date().toISOString();
+
+    try {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO entity_last_views (userId, entity, lastViewedAt)
+         VALUES (?, ?, ?)
+         ON CONFLICT(userId, entity) DO UPDATE SET lastViewedAt = excluded.lastViewedAt`,
+        user.id,
+        entity,
+        nowIso
+      );
+    } catch {
+      await initEntityViewsTable();
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO entity_last_views (userId, entity, lastViewedAt)
+         VALUES (?, ?, ?)
+         ON CONFLICT(userId, entity) DO UPDATE SET lastViewedAt = excluded.lastViewedAt`,
+        user.id,
+        entity,
+        nowIso
+      );
+    }
+
+    // Mark corresponding notifications as read
+    const typeMapping: Record<string, string[]> = {
+      tasks: ['TASK_ASSIGNED', 'TASK_REASSIGNED', 'TASK_MENTIONED'],
+      tickets: ['TICKET_ASSIGNED', 'TICKET_CREATED'],
+      projects: ['PROJECT_ASSIGNED', 'PROJECT_CREATED'],
+    };
+
+    const typesToMarkRead = typeMapping[entity] || [];
+    if (typesToMarkRead.length > 0) {
+      await prisma.notification.updateMany({
+        where: {
+          userId: user.id,
+          isRead: false,
+          type: { in: typesToMarkRead }
+        },
+        data: { isRead: true }
+      });
+    }
+
+    broadcastToUser(user.id, {
+      type: WSEventTypes.SIDEBAR_BADGES_UPDATED,
+      payload: { entity, viewedAt: nowIso }
+    });
+
+    res.json({ success: true, entity, viewedAt: nowIso });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/notifications
 router.get('/', async (req, res, next) => {
   try {
@@ -28,6 +205,18 @@ router.get('/', async (req, res, next) => {
     ]);
 
     res.json({ notifications, total, unreadCount, page: parseInt(page as string) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/notifications/unread-count
+router.get('/unread-count', async (req, res, next) => {
+  try {
+    const count = await prisma.notification.count({
+      where: { userId: req.user!.id, isRead: false },
+    });
+    res.json({ unreadCount: count, count });
   } catch (err) {
     next(err);
   }

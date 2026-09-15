@@ -8,18 +8,57 @@ import {
   FileText, 
   Users, 
   AlertCircle, 
-  Building, 
   Ticket, 
   MessageSquare, 
   Send,
   AlertTriangle,
   FolderKanban,
   ShieldCheck,
-  CheckCircle2,
-  Sparkles
+  Sparkles,
+  Calendar,
+  Layers,
+  ArrowRight,
+  ChevronDown,
+  History as HistoryIcon,
+  X,
+  Check
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+
+interface StatusConfig {
+  label: string;
+  desc: string;
+  dotColor: string;
+  bgColor: string;
+  textColor: string;
+  borderColor: string;
+}
+
+const STATUS_CONFIG: Record<string, StatusConfig> = {
+  BACKLOG: { label: 'Backlog', desc: 'Queued for future sprint work', dotColor: '#94a3b8', bgColor: 'rgba(148, 163, 184, 0.1)', textColor: '#94a3b8', borderColor: 'rgba(148, 163, 184, 0.25)' },
+  TODO: { label: 'To Do', desc: 'Ready for active development', dotColor: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.12)', textColor: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.3)' },
+  IN_PROGRESS: { label: 'In Progress', desc: 'Work actively underway', dotColor: '#eab308', bgColor: 'rgba(234, 179, 8, 0.12)', textColor: '#eab308', borderColor: 'rgba(234, 179, 8, 0.3)' },
+  IN_REVIEW: { label: 'In Review', desc: 'Awaiting peer review & QA', dotColor: '#f97316', bgColor: 'rgba(249, 115, 22, 0.12)', textColor: '#f97316', borderColor: 'rgba(249, 115, 22, 0.3)' },
+  BLOCKED: { label: 'Blocked', desc: 'Waiting on dependencies or approvals', dotColor: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.12)', textColor: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' },
+  DONE: { label: 'Completed', desc: 'Task finished and verified', dotColor: '#22c55e', bgColor: 'rgba(34, 197, 94, 0.12)', textColor: '#22c55e', borderColor: 'rgba(34, 197, 94, 0.3)' },
+};
+
+interface PriorityConfig {
+  label: string;
+  desc: string;
+  dotColor: string;
+  bgColor: string;
+  textColor: string;
+  borderColor: string;
+}
+
+const PRIORITY_CONFIG: Record<string, PriorityConfig> = {
+  LOW: { label: 'Low Priority', desc: 'Minor impact / flexible schedule', dotColor: '#22c55e', bgColor: 'rgba(34, 197, 94, 0.12)', textColor: '#22c55e', borderColor: 'rgba(34, 197, 94, 0.3)' },
+  MEDIUM: { label: 'Medium Priority', desc: 'Standard operational timeline', dotColor: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.12)', textColor: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.3)' },
+  HIGH: { label: 'High Priority', desc: 'Important - finish before sprint end', dotColor: '#f97316', bgColor: 'rgba(249, 115, 22, 0.12)', textColor: '#f97316', borderColor: 'rgba(249, 115, 22, 0.3)' },
+  CRITICAL: { label: 'Critical Priority', desc: 'Urgent - requires immediate action', dotColor: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.15)', textColor: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.35)' },
+};
 
 export function TaskDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -35,6 +74,9 @@ export function TaskDetailsPage() {
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
   const [approvalTitle, setApprovalTitle] = useState('');
   const [approvalDescription, setApprovalDescription] = useState('');
+
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState(false);
 
   // Fetch Task Details
   const { data: task, isLoading, error } = useQuery({
@@ -62,9 +104,12 @@ export function TaskDetailsPage() {
   const updateStatusMutation = useMutation({
     mutationFn: (statusId: string) => api.patch(`/tasks/${id}`, { statusId }),
     onSuccess: (res: any) => {
-      toast.success(`Status changed to ${res.data.status?.name?.replace('_', ' ')}`);
+      const newStatusName = res.data.status?.name || '';
+      const displayLabel = STATUS_CONFIG[newStatusName]?.label || newStatusName.replace('_', ' ');
+      toast.success(`Status changed to ${displayLabel}`);
       queryClient.invalidateQueries({ queryKey: ['task', id] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['task-status-logs'] });
       queryClient.invalidateQueries({ queryKey: ['mywork'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
@@ -147,12 +192,14 @@ export function TaskDetailsPage() {
 
   if (error || !task) {
     return (
-      <div className="empty-state-card text-red my-8">
-        <AlertCircle size={40} className="mb-3" />
+      <div className="card max-w-lg mx-auto text-center py-12 px-6 my-12 border border-subtle shadow-sm">
+        <div className="w-16 h-16 rounded-2xl bg-red/10 text-red flex items-center justify-center mx-auto mb-4">
+          <AlertCircle size={32} />
+        </div>
         <h2 className="text-xl font-bold text-primary">Task Not Found</h2>
-        <p className="mt-1 text-sm text-muted">{(error as any)?.message || 'Task not found or access restricted.'}</p>
-        <button className="btn btn-secondary btn-sm mt-4" onClick={() => navigate('/tasks')}>
-          <ArrowLeft size={14} /> Back to Tasks
+        <p className="mt-1 text-xs text-muted">{(error as any)?.message || 'Task not found or access restricted.'}</p>
+        <button className="btn btn-secondary btn-sm mt-6 inline-flex items-center gap-2" onClick={() => navigate('/tasks')}>
+          <ArrowLeft size={14} /> Back to Task Board
         </button>
       </div>
     );
@@ -160,167 +207,461 @@ export function TaskDetailsPage() {
 
   // Derived metrics
   const totalLoggedHours = task.worklogs?.reduce((sum: number, w: any) => sum + Number(w.hours), 0) || 0;
-  const remainingHours = Math.max(0, (task.estimatedHours || 0) - totalLoggedHours);
-  const hasRisk = task.aiRisk?.hasRisk;
+  const estimatedHours = task.estimatedHours || 0;
+  const remainingHours = Math.max(0, estimatedHours - totalLoggedHours);
+  const effortPct = estimatedHours > 0 ? Math.min(100, Math.round((totalLoggedHours / estimatedHours) * 100)) : 0;
   const comments = task.comments || [];
   const worklogs = task.worklogs || [];
-  const approvals = task.approvals || [];
   const blockedByDeps = task.blockedByDeps || [];
   const blockingDeps = task.blockingDeps || [];
 
+  const currentStatusKey = task.status?.name || 'BACKLOG';
+  const statusConfig = STATUS_CONFIG[currentStatusKey] || {
+    label: currentStatusKey === 'DONE' ? 'COMPLETED' : currentStatusKey.replace('_', ' '),
+    dotColor: '#94a3b8',
+    bgColor: 'rgba(148, 163, 184, 0.1)',
+    textColor: '#94a3b8',
+    borderColor: 'rgba(148, 163, 184, 0.2)'
+  };
+
+  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && currentStatusKey !== 'DONE';
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Header & Breadcrumbs */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-subtle pb-4">
-        <div className="flex items-start gap-3">
-          <button 
-            className="btn-icon btn-ghost text-muted hover:text-primary mt-1" 
-            onClick={() => navigate('/tasks')}
-            title="Back to Tasks"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div>
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="font-mono text-xs font-bold text-accent bg-accent/10 px-2 py-0.5 rounded border border-accent/20">
+    <div className="space-y-6 animate-in fade-in duration-300 max-w-7xl mx-auto pb-16">
+      {/* Top Header Card Banner */}
+      <div className="bg-surface p-6 rounded-2xl border border-subtle shadow-sm space-y-5">
+        {/* Row 1: Integrated Back Navigation & Action Buttons */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-subtle/60 pb-4">
+          {/* Back Navigation & Breadcrumb */}
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => navigate('/tasks')}
+              className="w-8 h-8 rounded-lg bg-elevated hover:bg-elevated/80 border border-subtle flex items-center justify-center text-secondary hover:text-primary transition-all shadow-xs group shrink-0"
+              title="Back to Task Board"
+            >
+              <ArrowLeft size={16} className="transition-transform group-hover:-translate-x-0.5" />
+            </button>
+
+            <div className="flex items-center gap-2 text-xs text-muted font-medium flex-wrap">
+              <span className="cursor-pointer hover:text-primary transition-colors" onClick={() => navigate('/projects')}>
+                Projects
+              </span>
+              {task.project ? (
+                <>
+                  <span className="text-subtle">/</span>
+                  <span 
+                    className="cursor-pointer text-blue-400 hover:text-blue-300 transition-colors font-medium flex items-center gap-1"
+                    onClick={() => navigate(`/projects/${task.project.id}`)}
+                    title="Open parent project"
+                  >
+                    <FolderKanban size={13} className="shrink-0" />
+                    {task.project.name}
+                  </span>
+                </>
+              ) : null}
+              <span className="text-subtle">/</span>
+              <span className="cursor-pointer hover:text-primary transition-colors" onClick={() => navigate('/tasks')}>
+                Tasks
+              </span>
+              <span className="text-subtle">/</span>
+              <span className="font-mono font-bold text-accent bg-accent/10 px-2 py-0.5 rounded border border-accent/20">
                 {task.taskId}
               </span>
-
-              {/* Status Selector */}
-              <div className="relative inline-block">
-                <select
-                  className="bg-elevated border border-subtle text-xs font-semibold rounded-full px-2.5 py-1 text-primary cursor-pointer hover:border-accent"
-                  value={task.statusId}
-                  onChange={e => updateStatusMutation.mutate(e.target.value)}
-                >
-                  {statuses.map((s: any) => (
-                    <option key={s.id} value={s.id}>{s.name.replace('_', ' ')}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Priority Selector */}
-              <div className="relative inline-block">
-                <select
-                  className="bg-elevated border border-subtle text-xs font-medium rounded-full px-2.5 py-1 text-secondary cursor-pointer hover:border-accent"
-                  value={task.priorityId}
-                  onChange={e => updatePriorityMutation.mutate(e.target.value)}
-                >
-                  {priorities.map((p: any) => (
-                    <option key={p.id} value={p.id}>{p.name} Priority</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Originating Ticket Badge */}
-              {task.ticket && (
-                <button
-                  className="badge bg-amber-subtle text-amber border border-amber/30 text-xs flex items-center gap-1 hover:bg-amber/20 transition cursor-pointer"
-                  onClick={() => navigate(`/tickets/${task.ticket.id}`)}
-                  title="View Originating Ticket"
-                >
-                  <Ticket size={12} /> Linked Ticket: {task.ticket.ticketId}
-                </button>
-              )}
-
-              {hasRisk && (
-                <span className="badge bg-red-subtle text-red border border-red/30 flex items-center gap-1 text-xs">
-                  <AlertTriangle size={12} /> At-Risk Deadline
-                </span>
-              )}
             </div>
+          </div>
 
-            <h1 className="text-xl md:text-2xl font-bold text-primary">{task.title}</h1>
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button 
+              className="btn btn-secondary btn-sm flex items-center gap-2 shadow-xs text-xs font-medium px-3.5 py-2 border border-subtle hover:border-accent/40"
+              onClick={() => setIsLogWorkModalOpen(true)}
+            >
+              <Clock size={14} className="text-accent" />
+              <span>Log Work</span>
+            </button>
+            
+            <button 
+              className="btn btn-primary btn-sm flex items-center gap-2 shadow-md text-xs font-semibold px-4 py-2"
+              onClick={() => {
+                setApprovalTitle(`Sign-off: ${task.taskId} - ${task.title}`);
+                setIsApprovalModalOpen(true);
+              }}
+            >
+              <ShieldCheck size={15} />
+              <span>Request Approval</span>
+            </button>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button 
-            className="btn btn-secondary btn-sm flex items-center gap-1.5"
-            onClick={() => setIsLogWorkModalOpen(true)}
-          >
-            <Clock size={14} /> Log Work
-          </button>
-          
-          <button 
-            className="btn btn-primary btn-sm flex items-center gap-1.5"
-            onClick={() => {
-              setApprovalTitle(`Sign-off: ${task.taskId} - ${task.title}`);
-              setIsApprovalModalOpen(true);
-            }}
-          >
-            <ShieldCheck size={14} /> Request Approval
-          </button>
+        {/* Row 2: Task Title & Badges */}
+        <div className="space-y-3 pt-1">
+          {/* Project Hierarchy Badge */}
+          {task.project ? (
+            <div 
+              className="badge-project"
+              onClick={() => navigate(`/projects/${task.project.id}`)}
+              title="Click to view project details"
+            >
+              <FolderKanban size={14} className="badge-project-icon" />
+              <span className="badge-project-label">Project:</span>
+              <span className="badge-project-name">{task.project.name}</span>
+              <ArrowRight size={13} className="badge-project-arrow" />
+            </div>
+          ) : (
+            <div 
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-elevated text-xs text-muted border border-subtle w-fit"
+              style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}
+            >
+              <FolderKanban size={13} className="shrink-0" />
+              <span>No Project Linked</span>
+            </div>
+          )}
+
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary leading-tight">
+            {task.title}
+          </h1>
+
+          <div className="flex items-center gap-5 sm:gap-7 flex-wrap pt-2">
+            {/* Status Custom Dropdown */}
+            <div className="relative inline-block text-left">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsStatusDropdownOpen(!isStatusDropdownOpen);
+                  setIsPriorityDropdownOpen(false);
+                }}
+                className="inline-flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm border focus:outline-none cursor-pointer"
+                style={{
+                  backgroundColor: statusConfig.bgColor,
+                  color: statusConfig.textColor,
+                  borderColor: statusConfig.borderColor,
+                }}
+              >
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: statusConfig.dotColor }} />
+                <span>{statusConfig.label}</span>
+                <ChevronDown size={13} className={`transition-transform duration-200 opacity-80 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isStatusDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0"
+                    style={{ zIndex: 998 }}
+                    onClick={() => setIsStatusDropdownOpen(false)} 
+                  />
+                  <div 
+                    className="absolute left-0 mt-2 w-52 rounded-xl p-1.5 shadow-2xl transition-all overflow-hidden"
+                    style={{
+                      backgroundColor: '#161720',
+                      color: '#f3f4f6',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.95), 0 0 15px rgba(170, 59, 255, 0.08)',
+                      zIndex: 999
+                    }}
+                  >
+                    <div 
+                      className="px-3 py-1.5 flex items-center gap-1.5 mb-1"
+                      style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}
+                    >
+                      <Sparkles size={11} style={{ color: '#c084fc' }} />
+                      <span className="text-[10px] font-extrabold tracking-wider uppercase" style={{ color: '#9ca3af' }}>
+                        Task Status
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {statuses.map((s: any) => {
+                        const cfg = STATUS_CONFIG[s.name] || {
+                          label: s.name.replace('_', ' '),
+                          dotColor: '#94a3b8',
+                        };
+                        const isSelected = task.statusId === s.id;
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => {
+                              updateStatusMutation.mutate(s.id);
+                              setIsStatusDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-1.5 text-xs font-semibold flex items-center justify-between transition-all rounded-lg"
+                            style={{
+                              backgroundColor: isSelected ? 'rgba(170, 59, 255, 0.15)' : 'transparent',
+                              color: isSelected ? '#ffffff' : '#d1d5db',
+                              cursor: 'pointer'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
+                                e.currentTarget.style.color = '#ffffff';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isSelected) {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.color = '#d1d5db';
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span 
+                                className="w-2.5 h-2.5 rounded-full shrink-0" 
+                                style={{ 
+                                  backgroundColor: cfg.dotColor,
+                                  boxShadow: `0 0 6px ${cfg.dotColor}80` 
+                                }} 
+                              />
+                              <span className="font-semibold text-xs">{cfg.label}</span>
+                            </div>
+                            {isSelected && <Check size={13} style={{ color: '#c084fc' }} className="shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Priority Custom Dropdown */}
+            <div className="relative inline-block text-left">
+              {(() => {
+                const currentPriorityName = task.priority?.name || 'MEDIUM';
+                const prioConfig = PRIORITY_CONFIG[currentPriorityName] || {
+                  label: `${currentPriorityName} Priority`,
+                  dotColor: '#3b82f6',
+                  bgColor: 'rgba(59, 130, 246, 0.1)',
+                  textColor: '#3b82f6',
+                  borderColor: 'rgba(59, 130, 246, 0.2)'
+                };
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsPriorityDropdownOpen(!isPriorityDropdownOpen);
+                        setIsStatusDropdownOpen(false);
+                      }}
+                      className="inline-flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm border focus:outline-none cursor-pointer"
+                      style={{
+                        backgroundColor: prioConfig.bgColor,
+                        color: prioConfig.textColor,
+                        borderColor: prioConfig.borderColor,
+                      }}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: prioConfig.dotColor }} />
+                      <span>{prioConfig.label}</span>
+                      <ChevronDown size={13} className={`transition-transform duration-200 opacity-80 ${isPriorityDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {isPriorityDropdownOpen && (
+                      <>
+                        <div 
+                          className="fixed inset-0"
+                          style={{ zIndex: 998 }}
+                          onClick={() => setIsPriorityDropdownOpen(false)} 
+                        />
+                        <div 
+                          className="absolute left-0 mt-2 w-52 rounded-xl p-1.5 shadow-2xl transition-all overflow-hidden"
+                          style={{
+                            backgroundColor: '#161720',
+                            color: '#f3f4f6',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.95), 0 0 15px rgba(239, 68, 68, 0.08)',
+                            zIndex: 999
+                          }}
+                        >
+                          <div 
+                            className="px-3 py-1.5 flex items-center gap-1.5 mb-1"
+                            style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}
+                          >
+                            <AlertTriangle size={11} style={{ color: '#f87171' }} />
+                            <span className="text-[10px] font-extrabold tracking-wider uppercase" style={{ color: '#9ca3af' }}>
+                              Priority Level
+                            </span>
+                          </div>
+                          <div className="space-y-0.5">
+                            {priorities.map((p: any) => {
+                              const cfg = PRIORITY_CONFIG[p.name] || {
+                                label: `${p.name} Priority`,
+                                dotColor: '#94a3b8',
+                              };
+                              const isSelected = task.priorityId === p.id;
+                              return (
+                                <button
+                                  key={p.id}
+                                  onClick={() => {
+                                    updatePriorityMutation.mutate(p.id);
+                                    setIsPriorityDropdownOpen(false);
+                                  }}
+                                  className="w-full text-left px-3 py-1.5 text-xs font-semibold flex items-center justify-between transition-all rounded-lg"
+                                  style={{
+                                    backgroundColor: isSelected ? 'rgba(170, 59, 255, 0.15)' : 'transparent',
+                                    color: isSelected ? '#ffffff' : '#d1d5db',
+                                    cursor: 'pointer'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    if (!isSelected) {
+                                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
+                                      e.currentTarget.style.color = '#ffffff';
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    if (!isSelected) {
+                                      e.currentTarget.style.backgroundColor = 'transparent';
+                                      e.currentTarget.style.color = '#d1d5db';
+                                    }
+                                  }}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <span 
+                                      className="w-2.5 h-2.5 rounded-full shrink-0" 
+                                      style={{ 
+                                        backgroundColor: cfg.dotColor,
+                                        boxShadow: `0 0 6px ${cfg.dotColor}80` 
+                                      }} 
+                                    />
+                                    <span className="font-semibold text-xs">{cfg.label}</span>
+                                  </div>
+                                  {isSelected && <Check size={13} style={{ color: '#c084fc' }} className="shrink-0" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Overdue Warning */}
+            {isOverdue && (
+              <span className="px-4 py-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-bold flex items-center gap-2 shadow-xs">
+                <AlertTriangle size={14} className="text-rose-400 shrink-0" />
+                <span>Overdue Task</span>
+              </span>
+            )}
+
+            {/* Linked Ticket Badge */}
+            {task.ticket && (
+              <button
+                className="px-4 py-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold flex items-center gap-2 hover:bg-amber-500/20 transition cursor-pointer shadow-xs"
+                onClick={() => navigate(`/tickets/${task.ticket.id}`)}
+                title="View Originating Ticket"
+              >
+                <Ticket size={14} className="shrink-0" />
+                <span>Ticket #{task.ticket.ticketNumber || task.ticket.ticketId}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Grid Layout: Main Tabs & Sidebar Info */}
+      {/* Grid Layout: Main Content Tabs (2 Cols) & Sidebar Metadata (1 Col) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Main Column */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Navigation Tabs */}
-          <div className="flex border-b border-subtle gap-2">
+        
+        {/* Left Column (2/3) */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Navigation Pill Tabs */}
+          <div className="flex bg-elevated/60 p-1 rounded-xl border border-subtle gap-1 overflow-x-auto">
             <button
-              className={`pb-2.5 px-3 text-xs font-semibold transition border-b-2 ${activeTab === 'overview' ? 'border-accent text-primary' : 'border-transparent text-muted hover:text-primary'}`}
+              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+                activeTab === 'overview' 
+                  ? 'bg-surface text-primary shadow-xs border border-subtle' 
+                  : 'text-muted hover:text-primary hover:bg-surface/50 font-medium'
+              }`}
               onClick={() => setActiveTab('overview')}
             >
-              Overview
+              <FileText size={14} /> Overview
             </button>
+            
             <button
-              className={`pb-2.5 px-3 text-xs font-semibold transition border-b-2 flex items-center gap-1.5 ${activeTab === 'comments' ? 'border-accent text-primary' : 'border-transparent text-muted hover:text-primary'}`}
+              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+                activeTab === 'comments' 
+                  ? 'bg-surface text-primary shadow-xs border border-subtle' 
+                  : 'text-muted hover:text-primary hover:bg-surface/50 font-medium'
+              }`}
               onClick={() => setActiveTab('comments')}
             >
-              Comments
-              {comments.length > 0 && <span className="badge bg-elevated text-[10px]">{comments.length}</span>}
-            </button>
-            <button
-              className={`pb-2.5 px-3 text-xs font-semibold transition border-b-2 flex items-center gap-1.5 ${activeTab === 'worklogs' ? 'border-accent text-primary' : 'border-transparent text-muted hover:text-primary'}`}
-              onClick={() => setActiveTab('worklogs')}
-            >
-              Worklogs
-              <span className="badge bg-elevated text-[10px] font-mono">{totalLoggedHours}h</span>
-            </button>
-            <button
-              className={`pb-2.5 px-3 text-xs font-semibold transition border-b-2 flex items-center gap-1.5 ${activeTab === 'dependencies' ? 'border-accent text-primary' : 'border-transparent text-muted hover:text-primary'}`}
-              onClick={() => setActiveTab('dependencies')}
-            >
-              Dependencies
-              {(blockedByDeps.length + blockingDeps.length) > 0 && (
-                <span className="badge bg-elevated text-[10px]">{blockedByDeps.length + blockingDeps.length}</span>
+              <MessageSquare size={14} /> Comments
+              {comments.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-accent/10 text-accent font-mono text-[10px]">
+                  {comments.length}
+                </span>
               )}
             </button>
+
             <button
-              className={`pb-2.5 px-3 text-xs font-semibold transition border-b-2 ${activeTab === 'history' ? 'border-accent text-primary' : 'border-transparent text-muted hover:text-primary'}`}
+              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+                activeTab === 'worklogs' 
+                  ? 'bg-surface text-primary shadow-xs border border-subtle' 
+                  : 'text-muted hover:text-primary hover:bg-surface/50 font-medium'
+              }`}
+              onClick={() => setActiveTab('worklogs')}
+            >
+              <Clock size={14} /> Worklogs
+              <span className="px-1.5 py-0.2 rounded-full bg-accent/10 text-accent font-mono text-[10px]">
+                {totalLoggedHours}h
+              </span>
+            </button>
+
+            <button
+              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+                activeTab === 'dependencies' 
+                  ? 'bg-surface text-primary shadow-xs border border-subtle' 
+                  : 'text-muted hover:text-primary hover:bg-surface/50 font-medium'
+              }`}
+              onClick={() => setActiveTab('dependencies')}
+            >
+              <Layers size={14} /> Dependencies
+              {(blockedByDeps.length + blockingDeps.length) > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-accent/10 text-accent font-mono text-[10px]">
+                  {blockedByDeps.length + blockingDeps.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+                activeTab === 'history' 
+                  ? 'bg-surface text-primary shadow-xs border border-subtle' 
+                  : 'text-muted hover:text-primary hover:bg-surface/50 font-medium'
+              }`}
               onClick={() => setActiveTab('history')}
             >
-              History
+              <HistoryIcon size={14} /> Audit Trail
             </button>
           </div>
 
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
-            <div className="space-y-4">
-              <div className="card p-5 bg-surface border-subtle">
-                <h3 className="text-xs font-bold text-secondary uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <FileText size={14} /> Description
-                </h3>
-                <div className="text-sm text-primary leading-relaxed whitespace-pre-wrap">
-                  {task.description || <span className="text-muted italic">No description provided for this deliverable.</span>}
+            <div className="space-y-6">
+              {/* Task Description */}
+              <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
+                <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
+                  <FileText size={14} className="text-accent" /> Description
+                </div>
+                <div className="text-sm text-primary leading-relaxed whitespace-pre-wrap pl-1">
+                  {task.description || (
+                    <span className="text-muted italic">No detailed description provided for this deliverable.</span>
+                  )}
                 </div>
               </div>
 
               {/* AI Insights Card */}
               {task.aiRisk && (
-                <div className="card p-4 bg-gradient-to-r from-accent/5 to-purple-500/5 border-accent/20">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles size={15} className="text-accent" />
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">AI Predictive Analysis</h4>
+                <div className="card p-5 bg-gradient-to-br from-surface via-surface to-purple-500/5 border border-purple-500/20 shadow-sm space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-purple-500/10 text-purple-400">
+                      <Sparkles size={16} />
+                    </div>
+                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">AI Cycle Time & Risk Analysis</h4>
                   </div>
-                  <div className="text-xs text-secondary space-y-1">
-                    <div>Estimated Cycle Time: <strong className="text-primary">{task.aiRisk.estimatedCompletionDays || 2} days</strong></div>
+                  <div className="text-xs text-secondary space-y-1.5 pl-8">
+                    <div>Estimated Cycle Completion: <strong className="text-primary font-mono">{task.aiRisk.estimatedCompletionDays || 2} days</strong></div>
                     {task.aiRisk.riskFactors?.length > 0 && (
-                      <div className="text-red mt-1">
+                      <div className="text-rose-400 font-medium">
                         Risk Factor: {task.aiRisk.riskFactors.join(', ')}
                       </div>
                     )}
@@ -332,18 +673,19 @@ export function TaskDetailsPage() {
 
           {/* TAB 2: COMMENTS */}
           {activeTab === 'comments' && (
-            <div className="space-y-4">
-              {/* Comment Input */}
-              <div className="card p-4 bg-surface border-subtle space-y-3">
+            <div className="space-y-6">
+              {/* New Comment Input */}
+              <div className="card p-4 bg-surface border border-subtle shadow-sm space-y-3">
                 <textarea
-                  className="input text-xs w-full min-h-[70px]"
-                  placeholder="Add an update or report a blocker (AI will automatically flag dependencies)..."
+                  className="input text-xs w-full min-h-[80px] p-3 bg-elevated/50 focus:bg-elevated border-subtle"
+                  placeholder="Add a progress update, ask a question, or report a technical blocker..."
                   value={newComment}
                   onChange={e => setNewComment(e.target.value)}
                 />
-                <div className="flex justify-end">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted">AI engine automatically scans comments for blockers</span>
                   <button
-                    className="btn btn-primary btn-sm flex items-center gap-1.5"
+                    className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm text-xs font-semibold"
                     disabled={!newComment.trim() || postCommentMutation.isPending}
                     onClick={() => postCommentMutation.mutate(newComment)}
                   >
@@ -352,37 +694,43 @@ export function TaskDetailsPage() {
                 </div>
               </div>
 
-              {/* Comments Stream */}
-              <div className="space-y-3">
+              {/* Comments Feed */}
+              <div className="space-y-4">
                 {comments.map((comment: any) => (
-                  <div key={comment.id} className="card p-4 bg-surface border-subtle space-y-2">
+                  <div key={comment.id} className="card p-4 bg-surface border border-subtle shadow-sm space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="avatar avatar-sm bg-accent text-xs">
-                          {comment.user?.avatar ? <img src={comment.user.avatar} alt="" /> : comment.user?.name?.charAt(0) || '?'}
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 border border-subtle text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
+                          {comment.user?.avatar ? (
+                            <img src={comment.user.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                          ) : (
+                            comment.user?.name?.charAt(0).toUpperCase() || '?'
+                          )}
                         </div>
                         <div>
-                          <div className="text-xs font-semibold text-primary">{comment.user?.name}</div>
-                          <div className="text-[10px] text-muted">{format(new Date(comment.createdAt), 'MMM d, h:mm a')}</div>
+                          <div className="text-xs font-bold text-primary">{comment.user?.name}</div>
+                          <div className="text-[10px] text-muted">{format(new Date(comment.createdAt), 'MMM d, yyyy • h:mm a')}</div>
                         </div>
                       </div>
 
                       {comment.aiFlag === 'BLOCKER' && (
-                        <span className="badge bg-red-subtle text-red border border-red/30 text-[10px] font-bold">
+                        <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold tracking-wider">
                           BLOCKER DETECTED
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap pl-8">
+
+                    <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap pl-11">
                       {comment.content}
                     </div>
                   </div>
                 ))}
 
                 {comments.length === 0 && (
-                  <div className="empty-state-card py-8">
-                    <MessageSquare size={28} className="text-muted mb-2" />
-                    <div className="text-xs text-muted">No comments yet. Start the conversation above.</div>
+                  <div className="card text-center py-12 border border-subtle bg-surface/50">
+                    <MessageSquare size={32} className="text-muted mx-auto mb-2" />
+                    <div className="text-xs font-semibold text-primary">No comments recorded</div>
+                    <div className="text-[11px] text-muted mt-0.5">Be the first to leave an update on this task above.</div>
                   </div>
                 )}
               </div>
@@ -391,46 +739,50 @@ export function TaskDetailsPage() {
 
           {/* TAB 3: WORKLOGS */}
           {activeTab === 'worklogs' && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              {/* Summary Effort Cards */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="card p-3 bg-surface border-subtle">
-                  <div className="text-[11px] text-muted">Estimated</div>
-                  <div className="text-lg font-bold font-mono text-primary">{task.estimatedHours || 0}h</div>
+                <div className="card p-4 bg-surface border border-subtle shadow-sm">
+                  <div className="text-xs text-muted font-medium">Estimated Effort</div>
+                  <div className="text-xl font-bold font-mono text-primary mt-1">{estimatedHours} hrs</div>
                 </div>
-                <div className="card p-3 bg-surface border-subtle">
-                  <div className="text-[11px] text-muted">Logged Effort</div>
-                  <div className="text-lg font-bold font-mono text-accent">{totalLoggedHours}h</div>
+
+                <div className="card p-4 bg-surface border border-subtle shadow-sm">
+                  <div className="text-xs text-muted font-medium">Actual Logged</div>
+                  <div className="text-xl font-bold font-mono text-accent mt-1">{totalLoggedHours} hrs</div>
                 </div>
-                <div className="card p-3 bg-surface border-subtle">
-                  <div className="text-[11px] text-muted">Remaining</div>
-                  <div className="text-lg font-bold font-mono text-green">{remainingHours}h</div>
+
+                <div className="card p-4 bg-surface border border-subtle shadow-sm">
+                  <div className="text-xs text-muted font-medium">Remaining Effort</div>
+                  <div className="text-xl font-bold font-mono text-emerald-400 mt-1">{remainingHours} hrs</div>
                 </div>
               </div>
 
-              <div className="card overflow-hidden">
+              {/* Worklogs Table */}
+              <div className="card overflow-hidden border border-subtle shadow-sm bg-surface">
                 <div className="table-responsive">
-                  <table>
+                  <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr>
-                        <th>Engineer</th>
-                        <th>Hours</th>
-                        <th>Notes</th>
-                        <th>Logged Date</th>
+                      <tr className="bg-elevated/70 border-b border-subtle text-[11px] font-bold text-muted uppercase tracking-wider">
+                        <th className="py-3.5 px-4">Engineer</th>
+                        <th className="py-3.5 px-4">Hours</th>
+                        <th className="py-3.5 px-4">Work Description</th>
+                        <th className="py-3.5 px-4 text-right">Log Date</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-subtle/60 text-xs">
                       {worklogs.map((w: any) => (
-                        <tr key={w.id}>
-                          <td className="text-xs font-medium text-primary">
+                        <tr key={w.id} className="hover:bg-elevated/40 transition-colors">
+                          <td className="py-3.5 px-4 font-semibold text-primary">
                             {w.user?.name || 'Engineer'}
                           </td>
-                          <td className="text-xs font-mono font-bold text-accent">
-                            {w.hours}h
+                          <td className="py-3.5 px-4 font-mono font-bold text-accent">
+                            {w.hours} hrs
                           </td>
-                          <td className="text-xs text-secondary">
+                          <td className="py-3.5 px-4 text-secondary">
                             {w.description || '—'}
                           </td>
-                          <td className="text-xs text-muted">
+                          <td className="py-3.5 px-4 text-right text-muted whitespace-nowrap">
                             {format(new Date(w.logDate || w.createdAt), 'MMM d, yyyy')}
                           </td>
                         </tr>
@@ -438,8 +790,8 @@ export function TaskDetailsPage() {
 
                       {worklogs.length === 0 && (
                         <tr>
-                          <td colSpan={4} className="text-center py-8 text-xs text-muted">
-                            No work logged yet. Click "+ Log Work" above.
+                          <td colSpan={4} className="text-center py-10 text-xs text-muted">
+                            No effort logged yet. Click "+ Log Work" at the top right.
                           </td>
                         </tr>
                       )}
@@ -452,276 +804,347 @@ export function TaskDetailsPage() {
 
           {/* TAB 4: DEPENDENCIES */}
           {activeTab === 'dependencies' && (
-            <div className="space-y-4">
-              <div className="card p-4 bg-surface border-subtle space-y-2">
-                <h4 className="text-xs font-bold text-secondary uppercase tracking-wider">Prerequisite Tasks (Blocked By)</h4>
+            <div className="space-y-6">
+              {/* Prerequisite Tasks */}
+              <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                  <AlertCircle size={15} className="text-rose-400" /> Prerequisite Tasks (Blocked By)
+                </h4>
                 {blockedByDeps.length > 0 ? (
-                  <div className="space-y-2 mt-2">
+                  <div className="space-y-2 pt-1">
                     {blockedByDeps.map((dep: any) => (
                       <div 
                         key={dep.id} 
-                        className="flex items-center justify-between p-2.5 bg-elevated rounded border border-subtle cursor-pointer hover:border-accent"
+                        className="flex items-center justify-between p-3 bg-elevated/60 rounded-xl border border-subtle cursor-pointer hover:border-accent/40 transition"
                         onClick={() => navigate(`/tasks/${dep.source?.id}`)}
                       >
-                        <span className="font-mono text-xs text-accent">{dep.source?.taskId}</span>
-                        <span className="text-xs text-primary font-medium">{dep.source?.title}</span>
-                        <span className="badge bg-surface text-[10px]">{dep.source?.status?.name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-xs font-bold text-accent">{dep.source?.taskId}</span>
+                          <span className="text-xs text-primary font-medium">{dep.source?.title}</span>
+                        </div>
+                        <span className="badge bg-surface text-secondary text-[10px] font-semibold border border-subtle">
+                          {dep.source?.status?.name?.replace('_', ' ')}
+                        </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted italic">This task is not blocked by any dependencies.</p>
+                  <p className="text-xs text-muted italic pl-1">This task is not blocked by any prerequisites.</p>
                 )}
               </div>
 
-              <div className="card p-4 bg-surface border-subtle space-y-2">
-                <h4 className="text-xs font-bold text-secondary uppercase tracking-wider">Subsequent Tasks (Blocking)</h4>
+              {/* Subsequent Tasks */}
+              <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                  <ArrowRight size={15} className="text-blue-400" /> Subsequent Tasks (Blocking)
+                </h4>
                 {blockingDeps.length > 0 ? (
-                  <div className="space-y-2 mt-2">
+                  <div className="space-y-2 pt-1">
                     {blockingDeps.map((dep: any) => (
                       <div 
                         key={dep.id} 
-                        className="flex items-center justify-between p-2.5 bg-elevated rounded border border-subtle cursor-pointer hover:border-accent"
+                        className="flex items-center justify-between p-3 bg-elevated/60 rounded-xl border border-subtle cursor-pointer hover:border-accent/40 transition"
                         onClick={() => navigate(`/tasks/${dep.target?.id}`)}
                       >
-                        <span className="font-mono text-xs text-accent">{dep.target?.taskId}</span>
-                        <span className="text-xs text-primary font-medium">{dep.target?.title}</span>
-                        <span className="badge bg-surface text-[10px]">{dep.target?.status?.name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-xs font-bold text-accent">{dep.target?.taskId}</span>
+                          <span className="text-xs text-primary font-medium">{dep.target?.title}</span>
+                        </div>
+                        <span className="badge bg-surface text-secondary text-[10px] font-semibold border border-subtle">
+                          {dep.target?.status?.name?.replace('_', ' ')}
+                        </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted italic">This task does not block any other tasks.</p>
+                  <p className="text-xs text-muted italic pl-1">This task does not block any subsequent deliverables.</p>
                 )}
               </div>
             </div>
           )}
 
-          {/* TAB 5: HISTORY */}
+          {/* TAB 5: AUDIT TRAIL HISTORY */}
           {activeTab === 'history' && (
-            <div className="card p-4 bg-surface border-subtle">
-              <div className="space-y-3">
+            <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2 border-b border-subtle pb-3">
+                <HistoryIcon size={15} className="text-accent" /> Audit Trail Events
+              </h4>
+              <div className="space-y-3 pt-1">
                 {task.history?.map((item: any) => (
-                  <div key={item.id} className="flex gap-3 text-xs border-b border-subtle/50 pb-2.5">
-                    <div className="text-muted font-mono whitespace-nowrap text-[11px]">
-                      {format(new Date(item.createdAt), 'MMM d, h:mm a')}
+                  <div key={item.id} className="flex items-center justify-between text-xs border-b border-subtle/50 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-primary">{item.action.replace(/_/g, ' ')}</span>
+                      {item.field && <span className="text-muted">on <code className="text-accent font-mono">{item.field}</code></span>}
                     </div>
-                    <div className="text-secondary">
-                      <strong className="text-primary">{item.action.replace(/_/g, ' ')}</strong>
-                      {item.field && <span> on <code className="text-accent">{item.field}</code></span>}
+                    <div className="text-[11px] text-muted font-mono">
+                      {format(new Date(item.createdAt), 'MMM d, yyyy • h:mm a')}
                     </div>
                   </div>
                 ))}
 
                 {(!task.history || task.history.length === 0) && (
-                  <p className="text-xs text-muted italic text-center py-4">No audit events recorded.</p>
+                  <p className="text-xs text-muted italic text-center py-6">No audit trail events recorded yet.</p>
                 )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Right Sidebar Metadata */}
-        <div className="space-y-4">
-          {/* Customer 360 Link */}
-          {task.customer && (
-            <div 
-              className="card p-4 bg-surface border-subtle cursor-pointer hover:border-accent/40 transition"
-              onClick={() => navigate(`/customers/${task.customer.id}`)}
-            >
-              <div className="text-[11px] text-muted font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Building size={13} className="text-green" /> Customer 360
-              </div>
-              <div className="text-sm font-bold text-primary">{task.customer.name}</div>
-              <div className="text-xs text-muted font-mono mt-0.5">{task.customer.code} • Click to view account</div>
+        {/* Right Sidebar Metadata (1/3) */}
+        <div className="space-y-5">
+          
+          {/* Card 1: Project & Customer Context */}
+          <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
+            <div className="text-xs font-bold text-muted uppercase tracking-wider flex items-center gap-2 border-b border-subtle pb-2.5">
+              <FolderKanban size={15} style={{ color: '#60a5fa' }} /> Project & Context
             </div>
-          )}
 
-          {/* Project Link */}
-          {task.project && (
-            <div 
-              className="card p-4 bg-surface border-subtle cursor-pointer hover:border-blue/40 transition"
-              onClick={() => navigate(`/projects/${task.project.id}`)}
-            >
-              <div className="text-[11px] text-muted font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <FolderKanban size={13} className="text-blue" /> Project Context
+            {task.project ? (
+              <div 
+                className="p-3.5 rounded-xl cursor-pointer transition group"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(79, 70, 229, 0.06) 100%)',
+                  border: '1px solid rgba(96, 165, 250, 0.25)',
+                }}
+                onClick={() => navigate(`/projects/${task.project.id}`)}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1" style={{ color: '#93c5fd' }}>
+                    <FolderKanban size={12} style={{ color: '#60a5fa' }} /> Project
+                  </span>
+                  <span className="text-[10px] text-muted">Click to view</span>
+                </div>
+                <div className="text-sm font-bold text-primary group-hover:text-blue-400 transition-colors">
+                  {task.project.name}
+                </div>
+                <div className="text-[11px] text-muted mt-1 flex items-center gap-1 group-hover:text-secondary transition-colors">
+                  <span>Open master project dashboard & team</span>
+                  <ArrowRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+                </div>
               </div>
-              <div className="text-sm font-bold text-primary">{task.project.name}</div>
-              <div className="text-xs text-muted mt-0.5">Click to view project roadmap</div>
+            ) : (
+              <div className="text-xs text-muted italic p-2 rounded-lg bg-elevated/50">No project linked</div>
+            )}
+
+            {task.customer && (
+              <div 
+                className="p-3 rounded-xl bg-elevated/50 border border-subtle cursor-pointer hover:border-emerald-500/40 transition group"
+                onClick={() => navigate(`/customers/${task.customer.id}`)}
+              >
+                <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Customer Account</div>
+                <div className="text-sm font-bold text-primary group-hover:text-emerald-400 transition-colors">
+                  {task.customer.name}
+                </div>
+                <div className="text-[11px] text-muted font-mono mt-0.5">{task.customer.code} • Customer 360</div>
+              </div>
+            )}
+          </div>
+
+          {/* Card 2: People & Ownership */}
+          <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-4">
+            <div className="text-xs font-bold text-muted uppercase tracking-wider flex items-center gap-2 border-b border-subtle pb-2.5">
+              <Users size={15} className="text-amber-400" /> People & Ownership
             </div>
-          )}
 
-          {/* People Card */}
-          <div className="card p-4 bg-surface border-subtle space-y-3">
-            <h4 className="text-[11px] font-bold text-secondary uppercase tracking-wider flex items-center gap-1.5">
-              <Users size={13} /> People
-            </h4>
-
-            <div>
-              <span className="text-[10px] text-muted uppercase font-semibold block mb-1">Assignee</span>
+            {/* Assignee */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] text-muted font-semibold uppercase tracking-wider block">Assignee</span>
               {task.assignee ? (
-                <div className="flex items-center gap-2">
-                  <div className="avatar avatar-sm bg-accent text-xs">
-                    {task.assignee.avatar ? <img src={task.assignee.avatar} alt="" /> : task.assignee.name.charAt(0)}
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-elevated/50 border border-subtle">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-600 border border-subtle text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
+                    {task.assignee.avatar ? (
+                      <img src={task.assignee.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                    ) : (
+                      task.assignee.name.charAt(0).toUpperCase()
+                    )}
                   </div>
-                  <div>
-                    <div className="text-xs font-semibold text-primary">{task.assignee.name}</div>
-                    <div className="text-[10px] text-muted">{task.assignee.email}</div>
+                  <div className="truncate">
+                    <div className="text-xs font-bold text-primary">{task.assignee.name}</div>
+                    <div className="text-[11px] text-muted truncate">{task.assignee.email}</div>
                   </div>
                 </div>
               ) : (
-                <span className="text-xs text-muted italic">Unassigned</span>
+                <div className="p-2.5 rounded-xl bg-elevated/40 border border-subtle text-xs text-muted italic">
+                  Unassigned
+                </div>
               )}
             </div>
 
-            <div className="border-t border-subtle pt-2">
-              <span className="text-[10px] text-muted uppercase font-semibold block mb-1">Reporter</span>
-              <div className="text-xs font-medium text-secondary">{task.reporter?.name || 'System'}</div>
-            </div>
-          </div>
-
-          {/* Planning Details */}
-          <div className="card p-4 bg-surface border-subtle space-y-2.5">
-            <h4 className="text-[11px] font-bold text-secondary uppercase tracking-wider flex items-center gap-1.5">
-              <Clock size={13} /> Planning & Schedule
-            </h4>
-
-            <div className="flex justify-between text-xs py-1 border-b border-subtle/50">
-              <span className="text-muted">Due Date</span>
-              <span className="font-medium text-primary">
-                {task.dueDate ? format(new Date(task.dueDate), 'MMM d, yyyy') : 'No due date'}
-              </span>
-            </div>
-
-            <div className="flex justify-between text-xs py-1 border-b border-subtle/50">
-              <span className="text-muted">Estimated Hours</span>
-              <span className="font-mono font-medium text-primary">{task.estimatedHours || '—'} hrs</span>
-            </div>
-
-            <div className="flex justify-between text-xs py-1 border-b border-subtle/50">
-              <span className="text-muted">Actual Logged</span>
-              <span className="font-mono font-bold text-accent">{totalLoggedHours} hrs</span>
-            </div>
-
-            <div className="flex justify-between text-xs py-1">
-              <span className="text-muted">Created</span>
-              <span className="text-muted">{format(new Date(task.createdAt), 'MMM d, yyyy')}</span>
-            </div>
-          </div>
-
-          {/* Active Approvals */}
-          {approvals.length > 0 && (
-            <div className="card p-4 bg-surface border-subtle space-y-2">
-              <h4 className="text-[11px] font-bold text-secondary uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle2 size={13} className="text-green" /> Approvals
-              </h4>
-              {approvals.map((appr: any) => (
-                <div key={appr.id} className="p-2.5 bg-elevated rounded border border-subtle text-xs space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-primary">{appr.title}</span>
-                    <span className={`badge text-[10px] font-bold ${
-                      appr.status === 'APPROVED' ? 'bg-green-subtle text-green' :
-                      appr.status === 'REJECTED' ? 'bg-red-subtle text-red' :
-                      'bg-amber-subtle text-amber'
-                    }`}>
-                      {appr.status}
-                    </span>
+            {/* Reporter */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] text-muted font-semibold uppercase tracking-wider block">Reporter</span>
+              {task.reporter ? (
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-elevated/50 border border-subtle">
+                  <div className="w-8 h-8 rounded-full bg-slate-700 border border-subtle text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
+                    {task.reporter.avatar ? (
+                      <img src={task.reporter.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                    ) : (
+                      task.reporter.name.charAt(0).toUpperCase()
+                    )}
                   </div>
-                  <div className="text-[10px] text-muted">Requested by {appr.requester?.name}</div>
+                  <div className="truncate">
+                    <div className="text-xs font-bold text-primary">{task.reporter.name}</div>
+                    <div className="text-[10px] text-muted truncate">{task.reporter.email}</div>
+                  </div>
                 </div>
-              ))}
+              ) : (
+                <div className="text-xs text-muted italic pl-1">System Generated</div>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Card 3: Planning & Schedule Metrics */}
+          <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3.5">
+            <div className="text-xs font-bold text-muted uppercase tracking-wider flex items-center gap-2 border-b border-subtle pb-2.5">
+              <Clock size={15} className="text-emerald-400" /> Planning & Effort Progress
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-medium">
+                <span className="text-muted">Effort Logged</span>
+                <span className="font-mono text-accent font-bold">{totalLoggedHours}h / {estimatedHours}h</span>
+              </div>
+              <div className="w-full bg-elevated h-2 rounded-full overflow-hidden border border-subtle">
+                <div 
+                  className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${effortPct}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Schedule Details */}
+            <div className="space-y-2 pt-2 border-t border-subtle text-xs">
+              <div className="flex items-center justify-between py-1">
+                <span className="text-muted flex items-center gap-1.5">
+                  <Calendar size={13} className="text-muted" /> Due Date
+                </span>
+                <span className={`font-semibold ${isOverdue ? 'text-rose-400' : 'text-primary'}`}>
+                  {task.dueDate ? format(new Date(task.dueDate), 'MMM d, yyyy') : 'No due date'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between py-1">
+                <span className="text-muted">Created Date</span>
+                <span className="font-medium text-secondary">
+                  {format(new Date(task.createdAt), 'MMM d, yyyy')}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
+
       </div>
 
       {/* Log Work Modal */}
       {isLogWorkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop-blur">
-          <div className="card p-6 bg-surface border-subtle max-w-sm w-full space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-primary">Log Work Effort</h3>
-            <div className="space-y-3 text-xs">
+        <div className="modal-overlay z-50" onClick={() => setIsLogWorkModalOpen(false)}>
+          <div className="modal-content max-w-md p-6 bg-surface border border-subtle shadow-2xl rounded-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 border-b border-subtle pb-3">
+              <h3 className="font-bold text-base text-primary flex items-center gap-2">
+                <Clock size={18} className="text-accent" /> Log Work Effort ({task.taskId})
+              </h3>
+              <button onClick={() => setIsLogWorkModalOpen(false)} className="text-muted hover:text-primary">
+                <X size={16} />
+              </button>
+            </div>
+            
+            <div className="space-y-4 text-xs">
               <div>
-                <label className="input-label">Hours Spent</label>
-                <input
-                  type="number"
+                <label className="font-bold text-muted block mb-1">Hours Logged *</label>
+                <input 
+                  type="number" 
                   step="0.5"
-                  min="0.5"
-                  max="24"
+                  className="input text-xs w-full py-2 bg-elevated/50 border-subtle font-mono"
                   placeholder="e.g. 2.5"
-                  className="input"
                   value={logHours}
                   onChange={e => setLogHours(e.target.value)}
                 />
               </div>
+
               <div>
-                <label className="input-label">Work Description</label>
-                <textarea
-                  placeholder="Summary of engineering activities completed..."
-                  className="input min-h-[60px]"
+                <label className="font-bold text-muted block mb-1">Work Summary</label>
+                <textarea 
+                  className="input text-xs w-full min-h-[80px] p-2.5 bg-elevated/50 border-subtle"
+                  placeholder="Describe technical progress or resolution..."
                   value={logDescription}
                   onChange={e => setLogDescription(e.target.value)}
                 />
               </div>
-            </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button className="btn btn-ghost btn-sm" onClick={() => setIsLogWorkModalOpen(false)}>
-                Cancel
-              </button>
-              <button 
-                className="btn btn-primary btn-sm"
-                disabled={!logHours || logWorkMutation.isPending}
-                onClick={() => logWorkMutation.mutate({ hours: parseFloat(logHours), description: logDescription })}
-              >
-                Save Worklog
-              </button>
+              <div className="flex justify-end gap-2 pt-2">
+                <button 
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setIsLogWorkModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary btn-sm"
+                  disabled={!logHours || logWorkMutation.isPending}
+                  onClick={() => logWorkMutation.mutate({ hours: parseFloat(logHours), description: logDescription })}
+                >
+                  Save Log
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Request Sign-off Approval Modal */}
+      {/* Approval Sign-off Modal */}
       {isApprovalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop-blur">
-          <div className="card p-6 bg-surface border-subtle max-w-md w-full space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-primary">Request Formal Approval</h3>
-            <div className="space-y-3 text-xs">
+        <div className="modal-overlay z-50" onClick={() => setIsApprovalModalOpen(false)}>
+          <div className="modal-content max-w-md p-6 bg-surface border border-subtle shadow-2xl rounded-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 border-b border-subtle pb-3">
+              <h3 className="font-bold text-base text-primary flex items-center gap-2">
+                <ShieldCheck size={18} className="text-emerald-400" /> Request Sign-off Approval
+              </h3>
+              <button onClick={() => setIsApprovalModalOpen(false)} className="text-muted hover:text-primary">
+                <X size={16} />
+              </button>
+            </div>
+            
+            <div className="space-y-4 text-xs">
               <div>
-                <label className="input-label">Approval Title</label>
-                <input
-                  type="text"
-                  className="input"
+                <label className="font-bold text-muted block mb-1">Approval Title</label>
+                <input 
+                  type="text" 
+                  className="input text-xs w-full py-2 bg-elevated/50 border-subtle"
                   value={approvalTitle}
                   onChange={e => setApprovalTitle(e.target.value)}
                 />
               </div>
+
               <div>
-                <label className="input-label">Sign-off Notes & Verification Evidence</label>
-                <textarea
-                  placeholder="Explain what has been verified and why this deliverable is ready for sign-off..."
-                  className="input min-h-[80px]"
+                <label className="font-bold text-muted block mb-1">Reason / Notes</label>
+                <textarea 
+                  className="input text-xs w-full min-h-[80px] p-2.5 bg-elevated/50 border-subtle"
+                  placeholder="Provide context for sign-off review..."
                   value={approvalDescription}
                   onChange={e => setApprovalDescription(e.target.value)}
                 />
               </div>
-            </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button className="btn btn-ghost btn-sm" onClick={() => setIsApprovalModalOpen(false)}>
-                Cancel
-              </button>
-              <button 
-                className="btn btn-primary btn-sm"
-                disabled={!approvalTitle.trim() || requestApprovalMutation.isPending}
-                onClick={() => requestApprovalMutation.mutate({ 
-                  title: approvalTitle, 
-                  description: approvalDescription,
-                  type: 'TASK_COMPLETION' 
-                })}
-              >
-                Submit Request
-              </button>
+              <div className="flex justify-end gap-2 pt-2">
+                <button 
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setIsApprovalModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="btn btn-primary btn-sm"
+                  disabled={!approvalTitle || requestApprovalMutation.isPending}
+                  onClick={() => requestApprovalMutation.mutate({ 
+                    title: approvalTitle, 
+                    description: approvalDescription,
+                    type: 'TASK_SIGN_OFF'
+                  })}
+                >
+                  Submit Request
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -10,6 +10,7 @@ export interface User {
   role: string;
   department: { id: string; name: string; code: string; color: string } | null;
   permissions: string[];
+  mustChangePassword?: boolean;
 }
 
 interface AuthState {
@@ -18,6 +19,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   setAuth: (user: User, token: string) => void;
+  updateUser: (partial: Partial<User>) => void;
   logout: () => void;
   checkAuth: () => Promise<void>;
   hasPermission: (perm: string) => boolean;
@@ -32,6 +34,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
     set({ user, token, isAuthenticated: true });
+  },
+  updateUser: (partial) => {
+    const current = get().user;
+    if (!current) return;
+    const updated = { ...current, ...partial };
+    localStorage.setItem('user', JSON.stringify(updated));
+    set({ user: updated });
   },
   logout: () => {
     localStorage.removeItem('token');

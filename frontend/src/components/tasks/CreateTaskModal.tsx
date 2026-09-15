@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
 import { 
-  X, AlertTriangle, Bug, Briefcase, Megaphone, 
-  PlusCircle, Calendar, UserCheck, ShieldAlert
+  X, Bug, Briefcase, Megaphone, 
+  PlusCircle, Calendar, UserCheck, ShieldAlert, FolderKanban
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -12,9 +13,10 @@ interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultDepartmentId?: string;
+  defaultProjectId?: string;
 }
 
-export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: CreateTaskModalProps) {
+export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultProjectId }: CreateTaskModalProps) {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
@@ -33,6 +35,8 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: Create
   const [estimatedHours, setEstimatedHours] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
 
+  const [projectId, setProjectId] = useState(defaultProjectId || '');
+
   // Department-specific fields
   // FDE fields
   const [environment, setEnvironment] = useState('Production');
@@ -48,12 +52,28 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: Create
   const [campaignName, setCampaignName] = useState('');
   const [deliverableType, setDeliverableType] = useState('Social Media & Ads');
 
+  // Sync defaultProjectId when opened
+  useEffect(() => {
+    if (defaultProjectId) {
+      setProjectId(defaultProjectId);
+    }
+  }, [defaultProjectId]);
+
   // Fetch Metadata (priorities, departments, users)
   const { data: meta } = useQuery({
     queryKey: ['task-metadata'],
     queryFn: async () => {
       const res = await api.get('/tasks/meta/statuses');
       return res.data;
+    },
+    enabled: isOpen,
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects-select'],
+    queryFn: async () => {
+      const res = await api.get('/projects');
+      return Array.isArray(res.data) ? res.data : [];
     },
     enabled: isOpen,
   });
@@ -93,9 +113,11 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: Create
   const createTaskMutation = useMutation({
     mutationFn: (payload: any) => api.post('/tasks', payload),
     onSuccess: () => {
-      toast.success(isAdminOrSuper ? 'Task created and allocated!' : 'Issue raised successfully!');
+      toast.success(isAdminOrSuper ? 'Task created and mapped to project!' : 'Task created and assigned!');
       queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['project'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['unassigned-tasks'] });
       handleClose();
@@ -108,6 +130,7 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: Create
   const handleClose = () => {
     setTitle('');
     setDescription('');
+    setProjectId(defaultProjectId || '');
     setErrorLogs('');
     setStepsToReproduce('');
     setClientName('');
@@ -122,92 +145,102 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: Create
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      toast.error('Please enter a title');
+      toast.error('Please enter a task title');
+      return;
+    }
+    if (!projectId) {
+      toast.error('Please select a project to map this task');
       return;
     }
 
-    // Build rich formatted description based on persona
-    let fullDescription = description.trim();
-
-    if (isFDE) {
-      fullDescription = `### 🛠️ FDE Incident Details\n- **Environment:** ${environment}\n\n**Description:**\n${description}\n\n**Steps to Reproduce:**\n${stepsToReproduce || 'N/A'}\n\n**Error Logs / Traces:**\n\`\`\`\n${errorLogs || 'No logs provided'}\n\`\`\``;
-    } else if (isSales) {
-      fullDescription = `### 💼 Sales Client Blocker\n- **Client / Account:** ${clientName || 'General'}\n- **Category:** ${blockerCategory}\n- **Deal / ARR Impact:** ${dealValue ? `$${dealValue}` : 'Not Specified'}\n\n**Impact & Details:**\n${description}`;
-    } else if (isMarketing) {
-      fullDescription = `### 📣 Marketing Campaign Request\n- **Campaign:** ${campaignName || 'General Brand'}\n- **Deliverable Type:** ${deliverableType}\n\n**Brief & Requirements:**\n${description}`;
-    }
-
     const payload: any = {
-      title,
-      description: fullDescription,
+      title: title.trim(),
+      description: description.trim(),
+      projectId,
       departmentId: departmentId || user?.department?.id,
       priorityId: priorityId || undefined,
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
     };
 
-    if (isAdminOrSuper) {
-      if (assigneeId) payload.assigneeId = assigneeId;
-      if (estimatedHours) payload.estimatedHours = parseFloat(estimatedHours);
+    if (assigneeId) {
+      payload.assigneeId = assigneeId;
+    } else if (!isAdminOrSuper && user?.id) {
+      // Default to self-assign for users creating their own tasks
+      payload.assigneeId = user.id;
     }
+
+    if (estimatedHours) payload.estimatedHours = parseFloat(estimatedHours);
 
     createTaskMutation.mutate(payload);
   };
 
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-surface border border-subtle rounded-xl shadow-2xl w-full max-w-xl flex flex-col max-h-[90vh]">
+  return createPortal(
+    <div 
+      className="modal-overlay animate-in fade-in duration-200"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px'
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleClose();
+      }}
+    >
+      <div 
+        className="bg-surface border border-subtle rounded-2xl shadow-2xl w-full flex flex-col max-h-[90vh] my-auto"
+        style={{ 
+          backgroundColor: 'var(--bg-surface)',
+          maxWidth: '700px', /* 20% larger than 576px (max-w-xl) */
+          width: '100%'
+        }}
+      >
         
         {/* Header with Departmental Branding */}
-        <div className="p-4 border-b border-subtle flex justify-between items-center bg-surface-hover rounded-t-xl">
-          <div className="flex items-center gap-2.5">
-            {isAdminOrSuper ? (
-              <div className="w-8 h-8 rounded-lg bg-blue-subtle text-blue flex items-center justify-center">
-                <PlusCircle size={18} />
-              </div>
-            ) : isFDE ? (
-              <div className="w-8 h-8 rounded-lg bg-purple-subtle text-purple flex items-center justify-center">
-                <Bug size={18} />
-              </div>
-            ) : isSales ? (
-              <div className="w-8 h-8 rounded-lg bg-green-subtle text-green flex items-center justify-center">
-                <Briefcase size={18} />
-              </div>
-            ) : isMarketing ? (
-              <div className="w-8 h-8 rounded-lg bg-amber-subtle text-amber flex items-center justify-center">
-                <Megaphone size={18} />
-              </div>
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-accent text-primary flex items-center justify-center">
-                <AlertTriangle size={18} />
-              </div>
-            )}
+        <div className="px-6 py-4.5 border-b border-subtle flex justify-between items-center bg-surface-hover rounded-t-2xl">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-subtle text-blue flex items-center justify-center shrink-0">
+              <PlusCircle size={20} />
+            </div>
 
             <div>
               <h2 className="font-semibold text-base text-primary">
-                {isAdminOrSuper 
-                  ? 'Create & Allocate Task'
-                  : isFDE 
-                  ? 'Raise Technical Issue / Bug' 
-                  : isSales 
-                  ? 'Raise Client Blocker / Request' 
-                  : isMarketing 
-                  ? 'Submit Campaign Deliverable' 
-                  : 'Raise an Issue'}
+                Create & Allocate Task
               </h2>
-              <div className="text-xs text-muted flex items-center gap-1.5">
+              <div className="text-xs text-muted flex items-center gap-1.5 mt-0.5">
                 <span className="badge badge-sm uppercase tracking-wide">
-                  {isAdminOrSuper ? `${user?.role} MODE` : `${user?.department?.name || 'EMPLOYEE'} DESK`}
+                  {user?.role} MODE
                 </span>
                 <span>•</span>
-                <span>{isAdminOrSuper ? 'Full assignment privileges' : 'Will be queued for Admin allocation'}</span>
+                <span>{isAdminOrSuper ? 'Admin task creation & project allocation' : 'Create & map task to project'}</span>
               </div>
             </div>
           </div>
 
           <button 
-            className="text-muted hover:text-primary transition-colors p-1 rounded-lg hover:bg-surface"
+            className="text-muted hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-surface"
             onClick={handleClose}
           >
             <X size={18} />
@@ -215,8 +248,8 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: Create
         </div>
 
         {/* Modal Form Body */}
-        <div className="p-5 overflow-y-auto custom-scrollbar flex-1">
-          <form id="taskCreateForm" onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+          <form id="taskCreateForm" onSubmit={handleSubmit} className="flex flex-col gap-4.5">
             
             {/* Title */}
             <div className="form-group">
@@ -236,6 +269,30 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: Create
                 value={title} 
                 onChange={e => setTitle(e.target.value)} 
               />
+            </div>
+
+            {/* Target Project (Required Mapping) */}
+            <div className="form-group">
+              <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-primary">
+                  <FolderKanban size={14} className="text-blue-400" />
+                  Target Project *
+                </span>
+                <span className="text-[11px] text-muted normal-case font-normal">All tasks must be mapped to a project</span>
+              </label>
+              <select 
+                required 
+                className="input text-sm py-2"
+                value={projectId}
+                onChange={e => setProjectId(e.target.value)}
+              >
+                <option value="">Select Associated Project...</option>
+                {projects.map((p: any) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} {p.customer?.name ? `— ${p.customer.name}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* FDE Specific Fields */}
@@ -497,14 +554,14 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: Create
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-subtle bg-surface-hover rounded-b-xl flex justify-between items-center">
+        <div className="px-6 py-4 border-t border-subtle bg-surface-hover rounded-b-2xl flex justify-between items-center">
           <span className="text-xs text-muted">
-            {isAdminOrSuper ? 'Assignee will be notified instantly.' : 'Admins will triage & assign this issue.'}
+            {isAdminOrSuper ? 'Assignee will be notified instantly.' : 'Task will be mapped directly to the selected project.'}
           </span>
-          <div className="flex gap-2">
+          <div className="flex gap-2.5">
             <button 
               type="button" 
-              className="btn btn-secondary btn-sm"
+              className="btn btn-secondary text-xs px-4 py-2"
               onClick={handleClose}
             >
               Cancel
@@ -512,7 +569,7 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: Create
             <button 
               type="submit" 
               form="taskCreateForm"
-              className="btn btn-primary btn-sm"
+              className="btn btn-primary text-xs px-4 py-2 font-medium"
               disabled={createTaskMutation.isPending}
             >
               {createTaskMutation.isPending ? (
@@ -520,13 +577,14 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId }: Create
               ) : isAdminOrSuper ? (
                 'Create & Assign'
               ) : (
-                'Submit Issue'
+                'Create Task'
               )}
             </button>
           </div>
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

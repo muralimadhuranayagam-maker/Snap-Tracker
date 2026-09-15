@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
+import { useQuery } from '@tanstack/react-query';
+import api from '../../lib/api';
 import { 
   Activity, 
   LayoutDashboard, 
@@ -12,10 +14,10 @@ import {
   BarChart3, 
   Sliders,
   CheckCircle2,
-  Bot,
-  Sparkles,
   Settings,
   LogOut,
+  MessageSquare,
+  Clock,
 } from 'lucide-react';
 
 import { X } from 'lucide-react';
@@ -27,6 +29,51 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user, logout, hasPermission } = useAuthStore();
+
+  // Fetch real-time unread messages count for Team Chat
+  const { data: chatUnreadData } = useQuery<{ totalUnread: number; channelUnread: Record<string, number> }>({
+    queryKey: ['chat-unread-count'],
+    queryFn: async () => {
+      const res = await api.get('/chat/unread-count');
+      return res.data;
+    },
+    enabled: Boolean(user),
+    refetchInterval: 6000,
+  });
+
+  // Fetch real-time unread badges for Tasks, Tickets, Projects
+  const { data: sidebarBadges = { tasks: 0, tickets: 0, projects: 0 } } = useQuery<{
+    tasks: number;
+    tickets: number;
+    projects: number;
+  }>({
+    queryKey: ['sidebar-badges'],
+    queryFn: async () => {
+      const res = await api.get('/notifications/sidebar-badges');
+      return res.data;
+    },
+    enabled: Boolean(user),
+    refetchInterval: 6000,
+  });
+
+  const totalChatUnread = chatUnreadData?.totalUnread || 0;
+
+  const badgePillStyle: React.CSSProperties = {
+    minWidth: '20px',
+    height: '20px',
+    padding: '0 6px',
+    borderRadius: '10px',
+    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+    color: '#ffffff',
+    fontSize: '11px',
+    fontWeight: 700,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 2px 8px rgba(59, 130, 246, 0.5)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    marginLeft: 'auto'
+  };
 
   if (!user) return null;
 
@@ -73,15 +120,55 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </NavLink>
           <NavLink to="/tasks" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <CheckSquare className="nav-icon" />
-            Tasks
+            <span className="flex-1">Tasks</span>
+            {sidebarBadges.tasks > 0 && (
+              <span 
+                style={badgePillStyle}
+                className="animate-pulse"
+                title={`${sidebarBadges.tasks} new tasks`}
+              >
+                {sidebarBadges.tasks > 99 ? '99+' : sidebarBadges.tasks}
+              </span>
+            )}
           </NavLink>
           <NavLink to="/tickets" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <Ticket className="nav-icon" />
-            Tickets
+            <span className="flex-1">Tickets</span>
+            {sidebarBadges.tickets > 0 && (
+              <span 
+                style={badgePillStyle}
+                className="animate-pulse"
+                title={`${sidebarBadges.tickets} new tickets`}
+              >
+                {sidebarBadges.tickets > 99 ? '99+' : sidebarBadges.tickets}
+              </span>
+            )}
           </NavLink>
           <NavLink to="/projects" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <FolderKanban className="nav-icon" />
-            Projects
+            <span className="flex-1">Projects</span>
+            {sidebarBadges.projects > 0 && (
+              <span 
+                style={badgePillStyle}
+                className="animate-pulse"
+                title={`${sidebarBadges.projects} new projects`}
+              >
+                {sidebarBadges.projects > 99 ? '99+' : sidebarBadges.projects}
+              </span>
+            )}
+          </NavLink>
+          <NavLink to="/chat" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
+            <MessageSquare className="nav-icon" />
+            <span className="flex-1">Team Chat</span>
+            {totalChatUnread > 0 && (
+              <span 
+                style={badgePillStyle}
+                className="animate-pulse"
+                title={`${totalChatUnread} unread messages`}
+              >
+                {totalChatUnread > 99 ? '99+' : totalChatUnread}
+              </span>
+            )}
           </NavLink>
         </div>
 
@@ -95,6 +182,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <NavLink to="/customers" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <Building className="nav-icon" />
             Customers
+          </NavLink>
+          <NavLink to="/attendance" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
+            <Clock className="nav-icon" />
+            Attendance & Hours
           </NavLink>
         </div>
 
@@ -119,20 +210,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           )}
         </div>
 
-        {/* ─── INTELLIGENCE ─── */}
-        <div className="nav-section">
-          <div className="nav-section-label flex items-center gap-1">
-            <Sparkles size={11} className="text-purple" /> Intelligence
-          </div>
-          <NavLink to="/ai-assistant" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
-            <Bot className="nav-icon text-accent" />
-            AI Assistant
-          </NavLink>
-          <NavLink to="/ai-insights" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
-            <Sparkles className="nav-icon text-purple" />
-            AI Insights
-          </NavLink>
-        </div>
 
         {/* ─── SYSTEM ─── */}
         <div className="nav-section mt-auto">

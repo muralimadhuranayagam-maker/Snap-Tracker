@@ -21,8 +21,19 @@ router.get('/', async (req, res, next) => {
     if (status) where.status = status as string;
     if (type) where.type = type as string;
 
-    // RBAC: Non-admins only see approvals they requested or where they are approver
-    if (!isSuperAdmin && !isAdmin) {
+    // RBAC:
+    // Super Admins see all approvals
+    // Admins see approvals assigned to them, requested by them, or unassigned legacy approvals
+    // Employees only see approvals requested by them or where they are approver
+    if (isSuperAdmin) {
+      // Super admin sees all approvals
+    } else if (isAdmin) {
+      where.OR = [
+        { approverId: user.id },
+        { approverId: null },
+        { requesterId: user.id }
+      ];
+    } else {
       where.OR = [
         { requesterId: user.id },
         { approverId: user.id }
@@ -52,13 +63,56 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// ─── GET /api/approvals/approvers ────────────────────────────────────────────
+// Return all active Admins and Super Admins available to be selected for approval
+router.get('/approvers', async (req, res, next) => {
+  try {
+    const approvers = await prisma.user.findMany({
+      where: {
+        role: { name: { in: ['ADMIN', 'SUPER_ADMIN'] } },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        avatar: true,
+        title: true,
+        role: { select: { id: true, name: true } },
+      },
+      orderBy: [
+        { role: { name: 'asc' } },
+        { name: 'asc' },
+      ],
+    });
+
+    res.json(approvers);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── POST /api/approvals ─────────────────────────────────────────────────────
 router.post('/', async (req, res, next) => {
   try {
     const user = req.user!;
-    const { title, description, type, taskId, entityType, entityId } = req.body;
+    const { title, description, type, taskId, entityType, entityId, approverId } = req.body;
 
     if (!title || !type) throw new AppError('Title and approval type are required', 400);
+    if (!approverId) throw new AppError('Please select an approver (Admin or Super Admin)', 400);
+
+    // Verify approver exists and is an active Admin or Super Admin
+    const targetApprover = await prisma.user.findFirst({
+      where: {
+        id: approverId,
+        role: { name: { in: ['ADMIN', 'SUPER_ADMIN'] } },
+        isActive: true,
+      },
+      select: { id: true, name: true, email: true },
+    });
+    if (!targetApprover) {
+      throw new AppError('The selected recipient must be an active Admin or Super Admin', 400);
+    }
 
     const approval = await prisma.approval.create({
       data: {
@@ -66,6 +120,7 @@ router.post('/', async (req, res, next) => {
         description,
         type,
         requesterId: user.id,
+        approverId: targetApprover.id,
         taskId: taskId || null,
         entityType: entityType || (taskId ? 'Task' : null),
         entityId: entityId || taskId || null,
@@ -73,25 +128,19 @@ router.post('/', async (req, res, next) => {
       },
       include: {
         requester: { select: { id: true, name: true, email: true } },
+        approver: { select: { id: true, name: true, email: true } },
         task: { select: { id: true, taskId: true, title: true } }
       }
     });
 
-    // Notify admins about new pending approval
-    const admins = await prisma.user.findMany({
-      where: { role: { name: { in: ['ADMIN', 'SUPER_ADMIN'] } }, isActive: true },
-      select: { id: true }
+    // Notify ONLY the selected approver
+    await createNotification({
+      userId: targetApprover.id,
+      type: 'APPROVAL_REQUESTED',
+      title: `Approval Request: ${title}`,
+      message: `${user.name} submitted an approval request for ${type.replace('_', ' ')} assigned to you.`,
+      actionUrl: '/approvals'
     });
-
-    for (const admin of admins) {
-      await createNotification({
-        userId: admin.id,
-        type: 'APPROVAL_REQUESTED',
-        title: `Approval Request: ${title}`,
-        message: `${user.name} submitted an approval request for ${type.replace('_', ' ')}.`,
-        actionUrl: '/approvals'
-      });
-    }
 
     await createAuditLog({
       userId: user.id,
@@ -99,7 +148,7 @@ router.post('/', async (req, res, next) => {
       action: 'APPROVAL_REQUESTED',
       entity: 'Approval',
       entityId: approval.id,
-      newValue: { title, type, requester: user.name },
+      newValue: { title, type, requester: user.name, approver: targetApprover.name },
       req,
     });
 
@@ -115,6 +164,7 @@ router.post('/', async (req, res, next) => {
 router.patch('/:id/decision', requireAdminOrAbove, async (req, res, next) => {
   try {
     const user = req.user!;
+    const isSuperAdmin = user.roleName === 'SUPER_ADMIN';
     const decision = req.body.decision || req.body.status;
     const notes = req.body.notes;
 
@@ -129,6 +179,11 @@ router.patch('/:id/decision', requireAdminOrAbove, async (req, res, next) => {
     if (!existing) throw new AppError('Approval not found', 404);
     if (existing.status !== 'PENDING') {
       throw new AppError(`Approval is already in ${existing.status} status`, 400);
+    }
+
+    // Only the designated approver or a Super Admin can approve/reject
+    if (existing.approverId && existing.approverId !== user.id && !isSuperAdmin) {
+      throw new AppError('Only the assigned approver or a Super Admin can decide on this request', 403);
     }
 
     const updated = await prisma.approval.update({

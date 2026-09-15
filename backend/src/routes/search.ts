@@ -97,13 +97,14 @@ router.get('/', async (req, res, next) => {
         },
         take: 5,
       }),
-      // Users
-      isAdminOrAbove ? prisma.user.findMany({
+      // Users (Employees & Team Members)
+      prisma.user.findMany({
         where: {
           isActive: true,
           OR: [
             { name: { contains: searchStr } },
             { email: { contains: searchStr } },
+            { title: { contains: searchStr } },
           ]
         },
         select: {
@@ -111,10 +112,11 @@ router.get('/', async (req, res, next) => {
           name: true,
           email: true,
           avatar: true,
+          title: true,
           department: { select: { name: true, code: true } }
         },
-        take: 5,
-      }) : [],
+        take: 6,
+      }),
     ]);
 
     res.json({ tasks, tickets, projects, customers, users });
