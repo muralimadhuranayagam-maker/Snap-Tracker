@@ -32,6 +32,7 @@ import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
 import { RaiseTicketModal } from '../components/tickets/RaiseTicketModal';
+import { TeamAttendanceOverviewWidget } from '../components/attendance/TeamAttendanceOverviewWidget';
 
 export function DashboardPage() {
   const navigate = useNavigate();

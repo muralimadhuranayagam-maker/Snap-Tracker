@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Plus, Shield, Building2, Ticket, CheckSquare, ChevronDown, CheckCircle2, FolderPlus, Menu, Sun, Moon } from 'lucide-react';
+import { Bell, Plus, Shield, Building2, Ticket, CheckSquare, ChevronDown, CheckCircle2, FolderPlus, Menu, Sun, Moon, LogOut, Camera } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { CreateTaskModal } from '../tasks/CreateTaskModal';
 import { RaiseTicketModal } from '../tickets/RaiseTicketModal';
@@ -53,6 +53,13 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
     refetchInterval: 15_000,
   });
   const unreadCount = notifData?.unreadCount || 0;
+
+  // Fetch Attendance Check-in State
+  const { data: attendanceData } = useQuery({
+    queryKey: ['attendance-today'],
+    queryFn: () => api.get('/attendance/today').then(r => r.data),
+    refetchInterval: 60000,
+  });
 
 
 
