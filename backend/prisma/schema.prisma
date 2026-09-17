@@ -110,6 +110,8 @@ model User {
   attendanceEvents  AttendanceEvent[]
   webrtcSessions    WebRTCSession[]
   taskHistories     TaskHistory[]
+  leaves            Leave[]           @relation("UserLeaves")
+  approvedLeaves    Leave[]           @relation("LeaveApprover")
 
   @@index([email])
   @@index([departmentId])
@@ -976,3 +978,38 @@ model EntityLastView {
 }
 
 
+// ─── LEAVE MANAGEMENT ────────────────────────────────────────────────────────
+
+model LeaveType {
+  id             String   @id @default(uuid())
+  name           String   @unique // CASUAL_LEAVE, SICK_LEAVE, etc.
+  label          String   // Human readable: "Casual Leave"
+  description    String?
+  maxDaysPerYear Int      @default(0) // 0 = unlimited
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  leaves         Leave[]
+}
+
+model Leave {
+  id           String    @id @default(uuid())
+  userId       String
+  leaveTypeId  String
+  startDate    DateTime
+  endDate      DateTime
+  totalDays    Int
+  reason       String
+  status       String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  approverId   String
+  approverNote String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation("UserLeaves", fields: [userId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType @relation(fields: [leaveTypeId], references: [id])
+  approver     User      @relation("LeaveApprover", fields: [approverId], references: [id])
+
+  @@index([userId])
+  @@index([approverId])
+  @@index([status])
+}

@@ -18,6 +18,7 @@ import {
   LogOut,
   MessageSquare,
   Clock,
+  CalendarDays,
 } from 'lucide-react';
 
 import { X } from 'lucide-react';
@@ -186,6 +187,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <NavLink to="/attendance" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <Clock className="nav-icon" />
             Attendance & Hours
+          </NavLink>
+          <NavLink to="/leaves" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
+            <CalendarDays className="nav-icon" />
+            Leave Management
           </NavLink>
         </div>
 

@@ -26,6 +26,7 @@ import { TeamDirectoryPage } from './pages/TeamDirectoryPage';
 import { SettingsPage } from './pages/SettingsPage';
 import TeamChatPage from './pages/TeamChatPage';
 import { AttendancePage } from './pages/AttendancePage';
+import { LeavePage } from './pages/LeavePage';
 import { WebSocketProvider } from './context/WebSocketContext';
 import { AttendanceSessionProvider } from './context/AttendanceSessionContext';
 import { SetPermanentPasswordModal } from './components/auth/SetPermanentPasswordModal';
@@ -120,6 +121,7 @@ export default function App() {
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/:id" element={<CustomerDetailsPage />} />
           <Route path="/attendance" element={<AttendancePage />} />
+          <Route path="/leaves" element={<LeavePage />} />
 
           {/* Management Routes */}
           <Route path="/workload" element={<WorkloadPage />} />

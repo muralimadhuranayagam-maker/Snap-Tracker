@@ -31,6 +31,7 @@ import myworkRoutes from './routes/mywork';
 import workloadRoutes from './routes/workload';
 import chatRoutes from './routes/chat';
 import attendanceRoutes from './routes/attendance';
+import leavesRoutes from './routes/leaves';
 
 // Middleware
 import { errorHandler } from './middleware/errorHandler';
@@ -148,6 +149,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/api/attendance', attendanceRoutes); // Fallback for double-prefixed client requests
 app.use('/attendance', attendanceRoutes);
+app.use('/api/leaves', leavesRoutes);
 
 // 404 handler for API routes
 app.use('/api', (_req, res) => {
