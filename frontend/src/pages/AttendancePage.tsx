@@ -2222,6 +2222,7 @@ export function AttendancePage() {
             bottom: 0,
             zIndex: 2147483647,
             backgroundColor: '#070a12',
+            color: '#ffffff',
             display: 'flex',
             flexDirection: 'column',
             padding: '1.5rem',
@@ -2230,20 +2231,48 @@ export function AttendancePage() {
         >
           <div className="max-w-7xl mx-auto w-full flex flex-col h-full gap-6">
             {/* Top Header Bar */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 md:px-6 shadow-2xl flex items-center justify-between shrink-0">
+            <div
+              className="rounded-2xl p-4 md:px-6 shadow-2xl flex items-center justify-between shrink-0 border"
+              style={{
+                backgroundColor: '#0f172a',
+                borderColor: '#1e293b',
+                color: '#ffffff',
+              }}
+            >
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-xl bg-gradient-to-tr from-red-600 via-rose-600 to-pink-600 text-white shadow-lg shadow-red-500/30 border border-red-400/20">
-                  <Video size={24} className="animate-pulse" />
+                <div
+                  className="p-3 rounded-xl text-white shadow-lg border"
+                  style={{
+                    background: 'linear-gradient(135deg, #dc2626, #e11d48)',
+                    borderColor: 'rgba(248, 113, 113, 0.3)',
+                  }}
+                >
+                  <Video size={24} className="animate-pulse" style={{ color: '#ffffff' }} />
                 </div>
                 <div>
-                  <h2 className="text-lg md:text-xl font-extrabold text-white flex items-center gap-3 tracking-wide">
+                  <h2
+                    className="text-lg md:text-xl font-extrabold flex items-center gap-3 tracking-wide"
+                    style={{ color: '#ffffff' }}
+                  >
                     Live Command Center Wall
-                    <span className="px-3 py-1 rounded-full text-xs bg-red-500/20 text-red-400 border border-red-500/30 font-bold flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
-                      {(adminActivityData?.employees || []).filter((e: any) => e.currentState === 'WORKING' || e.currentState === 'IN_MEETING').length} Currently Active
+                    <span
+                      className="px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5"
+                      style={{
+                        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                        color: '#f87171',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                      }}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full animate-ping inline-block"
+                        style={{ backgroundColor: '#ef4444' }}
+                      />
+                      {(adminActivityData?.employees || []).filter(
+                        (e: any) => e.currentState === 'WORKING' || e.currentState === 'IN_MEETING'
+                      ).length} Currently Active
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs mt-0.5" style={{ color: '#94a3b8' }}>
                     Real-time multi-camera split-screen monitoring for Super Admin
                   </p>
                 </div>
@@ -2252,16 +2281,26 @@ export function AttendancePage() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={openMultiLiveMonitor}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-500/20 active:scale-95"
+                  className="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-lg active:scale-95"
+                  style={{
+                    backgroundColor: '#4f46e5',
+                    color: '#ffffff',
+                    border: 'none',
+                  }}
                 >
-                  <RefreshCw size={14} /> Refresh Feeds
+                  <RefreshCw size={14} style={{ color: '#ffffff' }} /> Refresh Feeds
                 </button>
                 <button
                   onClick={closeMultiLiveMonitor}
-                  className="p-2.5 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                  className="p-2.5 rounded-xl border transition-all cursor-pointer hover:scale-105 active:scale-95 flex items-center justify-center"
+                  style={{
+                    backgroundColor: '#1e293b',
+                    borderColor: '#334155',
+                    color: '#ffffff',
+                  }}
                   title="Close Live Monitor"
                 >
-                  <X size={20} />
+                  <X size={20} style={{ color: '#ffffff', stroke: '#ffffff' }} />
                 </button>
               </div>
             </div>
@@ -2275,13 +2314,29 @@ export function AttendancePage() {
 
                 if (activeEmps.length === 0) {
                   return (
-                    <div className="my-auto flex flex-col items-center justify-center text-center p-12 text-slate-400 gap-4 bg-slate-900/60 border border-slate-800 rounded-3xl shadow-2xl">
-                      <div className="p-5 rounded-2xl bg-slate-800/80 border border-slate-700/60 text-slate-400">
-                        <CameraOff size={48} className="text-slate-500" />
+                    <div
+                      className="my-auto flex flex-col items-center justify-center text-center p-12 gap-4 border rounded-3xl shadow-2xl"
+                      style={{
+                        backgroundColor: '#0f172a',
+                        borderColor: '#1e293b',
+                        color: '#94a3b8',
+                      }}
+                    >
+                      <div
+                        className="p-5 rounded-2xl border"
+                        style={{
+                          backgroundColor: '#1e293b',
+                          borderColor: '#334155',
+                          color: '#94a3b8',
+                        }}
+                      >
+                        <CameraOff size={48} style={{ color: '#64748b' }} />
                       </div>
                       <div className="space-y-1">
-                        <h3 className="text-lg font-bold text-white">No Employees Currently Active</h3>
-                        <p className="text-xs max-w-md text-slate-400 leading-relaxed">
+                        <h3 className="text-lg font-bold" style={{ color: '#ffffff' }}>
+                          No Employees Currently Active
+                        </h3>
+                        <p className="text-xs max-w-md leading-relaxed" style={{ color: '#94a3b8' }}>
                           There are no working sessions active right now. As employees clock in and start working, their live video streams will automatically appear here.
                         </p>
                       </div>
@@ -2306,31 +2361,63 @@ export function AttendancePage() {
                       return (
                         <div
                           key={emp.user.id}
-                          className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-4 shadow-2xl hover:border-slate-700 transition-all duration-300"
+                          className="rounded-2xl p-4 flex flex-col gap-4 shadow-2xl transition-all duration-300 border"
+                          style={{
+                            backgroundColor: '#0f172a',
+                            borderColor: '#1e293b',
+                            color: '#ffffff',
+                          }}
                         >
                           {/* Card Header */}
-                          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 gap-2">
+                          <div
+                            className="flex items-center justify-between border-b pb-3 gap-2"
+                            style={{ borderColor: '#1e293b' }}
+                          >
                             <div className="flex items-center gap-3 overflow-hidden">
-                              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-base shadow-md shrink-0">
+                              <div
+                                className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-base shadow-md shrink-0"
+                                style={{
+                                  background: 'linear-gradient(135deg, #4f46e5, #9333ea)',
+                                  color: '#ffffff',
+                                }}
+                              >
                                 {emp.user.name?.charAt(0)?.toUpperCase() || 'U'}
                               </div>
                               <div className="overflow-hidden">
-                                <div className="text-sm font-bold text-white truncate">
+                                <div className="text-sm font-bold truncate" style={{ color: '#ffffff' }}>
                                   {emp.user.name}
                                 </div>
-                                <div className="text-xs text-slate-400 truncate">{emp.user.email}</div>
+                                <div className="text-xs truncate" style={{ color: '#94a3b8' }}>
+                                  {emp.user.email}
+                                </div>
                               </div>
                             </div>
                             <div className="shrink-0">
-                              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                              <span
+                                className="px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5"
+                                style={{
+                                  backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                  color: '#34d399',
+                                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                                }}
+                              >
+                                <span
+                                  className="w-2 h-2 rounded-full animate-pulse"
+                                  style={{ backgroundColor: '#10b981' }}
+                                />
                                 {emp.currentState === 'IN_MEETING' ? 'In Meeting' : 'Working'}
                               </span>
                             </div>
                           </div>
 
                           {/* Video Tile Box */}
-                          <div className="w-full rounded-xl overflow-hidden border border-slate-800 bg-black shadow-inner">
+                          <div
+                            className="w-full rounded-xl overflow-hidden border shadow-inner"
+                            style={{
+                              borderColor: '#1e293b',
+                              backgroundColor: '#000000',
+                            }}
+                          >
                             <MediaVideoTile
                               stream={stream}
                               isConnecting={isConnecting}
