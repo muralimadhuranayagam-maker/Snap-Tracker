@@ -386,8 +386,6 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
 
   // WebRTC Streaming State (Employee Side)
   const { lastEvent, sendMessage } = useWebSocket();
-  const [isBeingStreamed, setIsBeingStreamed] = useState(false);
-  const [streamedByAdminName, setStreamedByAdminName] = useState('');
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
@@ -406,9 +404,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       };
 
       if (lastEvent.type === 'WEBRTC_REQUEST_STREAM') {
-        const { senderId, senderName } = lastEvent.payload || {};
-        setStreamedByAdminName(senderName || 'Super Admin');
-        setIsBeingStreamed(true);
+        const { senderId } = lastEvent.payload || {};
 
         // Ensure employee camera stream is active
         let stream = mediaStreamRef.current;
@@ -490,7 +486,6 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
           peerConnRef.current = null;
         }
         pendingIceCandidatesRef.current = [];
-        setIsBeingStreamed(false);
       }
     };
 
@@ -513,31 +508,6 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         mediaStream: mediaStreamRef.current,
       }}
     >
-      {/* Active Live Stream Notification Banner (Transparent & Visible for Employee) */}
-      {isBeingStreamed && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '16px',
-            right: '16px',
-            zIndex: 999999,
-            background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
-            color: '#ffffff',
-            padding: '10px 18px',
-            borderRadius: '30px',
-            boxShadow: '0 10px 30px rgba(220, 38, 38, 0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontSize: '12px',
-            fontWeight: 700,
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-          }}
-        >
-          <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ffffff', animation: 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite' }} />
-          <span>🔴 LIVE STREAMING ACTIVE — {streamedByAdminName} is viewing your live camera feed</span>
-        </div>
-      )}
       {children}
     </AttendanceSessionContext.Provider>
   );
