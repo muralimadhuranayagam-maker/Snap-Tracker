@@ -385,14 +385,12 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   }, [stopCamera]);
 
   // WebRTC Streaming State (Employee Side)
-  const { lastEvent, sendMessage } = useWebSocket();
+  const { sendMessage, subscribe } = useWebSocket();
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
   useEffect(() => {
-    if (!lastEvent) return;
-
-    const handleWebRTC = async () => {
+    const unsubscribe = subscribe(async (event) => {
       const rtcConfig: RTCConfiguration = {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
@@ -403,8 +401,8 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         ],
       };
 
-      if (lastEvent.type === 'WEBRTC_REQUEST_STREAM') {
-        const { senderId } = lastEvent.payload || {};
+      if (event.type === 'WEBRTC_REQUEST_STREAM') {
+        const { senderId } = event.payload || {};
 
         // Ensure employee camera stream is active
         let stream = mediaStreamRef.current;
@@ -422,6 +420,10 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
           } catch (err) {
             console.error('[Employee WebRTC] Failed to acquire camera stream:', err);
           }
+        }
+
+        if (peerConnRef.current) {
+          try { peerConnRef.current.close(); } catch {}
         }
 
         const pc = new RTCPeerConnection(rtcConfig);
@@ -457,10 +459,10 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         } catch (err) {
           console.error('[Employee WebRTC] Offer creation failed:', err);
         }
-      } else if (lastEvent.type === 'WEBRTC_ANSWER' && peerConnRef.current) {
+      } else if (event.type === 'WEBRTC_ANSWER' && peerConnRef.current) {
         const pc = peerConnRef.current;
         try {
-          await pc.setRemoteDescription(new RTCSessionDescription(lastEvent.payload.answer));
+          await pc.setRemoteDescription(new RTCSessionDescription(event.payload.answer));
           while (pendingIceCandidatesRef.current.length > 0) {
             const cand = pendingIceCandidatesRef.current.shift();
             if (cand) {
@@ -470,9 +472,9 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         } catch (err) {
           console.error('[Employee WebRTC] Failed to set remote answer:', err);
         }
-      } else if (lastEvent.type === 'WEBRTC_ICE_CANDIDATE' && peerConnRef.current) {
+      } else if (event.type === 'WEBRTC_ICE_CANDIDATE' && peerConnRef.current) {
         const pc = peerConnRef.current;
-        const candidate = lastEvent.payload?.candidate;
+        const candidate = event.payload?.candidate;
         if (candidate) {
           if (pc.remoteDescription && pc.remoteDescription.type) {
             pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
@@ -480,17 +482,19 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
             pendingIceCandidatesRef.current.push(candidate);
           }
         }
-      } else if (lastEvent.type === 'WEBRTC_STOP_STREAM') {
+      } else if (event.type === 'WEBRTC_STOP_STREAM') {
         if (peerConnRef.current) {
           peerConnRef.current.close();
           peerConnRef.current = null;
         }
         pendingIceCandidatesRef.current = [];
       }
-    };
+    });
 
-    handleWebRTC();
-  }, [lastEvent, sendMessage]);
+    return () => {
+      unsubscribe();
+    };
+  }, [sendMessage, subscribe]);
 
   return (
     <AttendanceSessionContext.Provider

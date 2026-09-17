@@ -9,16 +9,20 @@ export interface WSEvent {
   timestamp?: string;
 }
 
+export type WSListener = (event: WSEvent) => void;
+
 interface WebSocketContextType {
   isConnected: boolean;
   lastEvent: WSEvent | null;
   sendMessage: (data: any) => void;
+  subscribe: (listener: WSListener) => () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType>({
   isConnected: false,
   lastEvent: null,
   sendMessage: () => {},
+  subscribe: () => () => {},
 });
 
 export const useWebSocket = () => useContext(WebSocketContext);
@@ -33,8 +37,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<WSEvent | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const listenersRef = useRef<Set<WSListener>>(new Set());
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef(0);
+
+  const subscribe = useCallback((listener: WSListener) => {
+    listenersRef.current.add(listener);
+    return () => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
 
   const connect = useCallback(() => {
     if (!token || !isAuthenticated) {
@@ -65,6 +77,15 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         try {
           const data: WSEvent = JSON.parse(event.data);
           setLastEvent(data);
+
+          // Synchronously notify all subscribers (e.g. WebRTC signaling listeners)
+          listenersRef.current.forEach((listener) => {
+            try {
+              listener(data);
+            } catch (err) {
+              console.error('[WS Listener Error]', err);
+            }
+          });
 
           const { type, payload } = data;
 
@@ -213,7 +234,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   }, []);
 
   return (
-    <WebSocketContext.Provider value={{ isConnected, lastEvent, sendMessage }}>
+    <WebSocketContext.Provider value={{ isConnected, lastEvent, sendMessage, subscribe }}>
       {children}
     </WebSocketContext.Provider>
   );

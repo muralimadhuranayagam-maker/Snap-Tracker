@@ -55,7 +55,7 @@ export function AttendancePage() {
   const adminLiveVideoRef = useRef<HTMLVideoElement | null>(null);
   const adminPendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const liveStreamTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { sendMessage, lastEvent } = useWebSocket();
+  const { sendMessage, subscribe } = useWebSocket();
 
   // Shared background camera and face presence session
   const {
@@ -537,15 +537,15 @@ export function AttendancePage() {
 
   // Listen for WebRTC signals from employee
   useEffect(() => {
-    if (!lastEvent || !isWatchingLiveStream) return;
+    if (!isWatchingLiveStream) return;
 
-    const handleAdminWebRTC = async () => {
+    const unsubscribe = subscribe(async (event) => {
       const pc = adminPeerConnRef.current;
       if (!pc) return;
 
-      if (lastEvent.type === 'WEBRTC_OFFER') {
+      if (event.type === 'WEBRTC_OFFER') {
         try {
-          await pc.setRemoteDescription(new RTCSessionDescription(lastEvent.payload.offer));
+          await pc.setRemoteDescription(new RTCSessionDescription(event.payload.offer));
           // Process any queued candidates that arrived prior to remote description set
           while (adminPendingIceCandidatesRef.current.length > 0) {
             const cand = adminPendingIceCandidatesRef.current.shift();
@@ -565,8 +565,8 @@ export function AttendancePage() {
         } catch (err) {
           console.error('[Admin WebRTC] Failed to handle offer:', err);
         }
-      } else if (lastEvent.type === 'WEBRTC_ICE_CANDIDATE') {
-        const candidate = lastEvent.payload?.candidate;
+      } else if (event.type === 'WEBRTC_ICE_CANDIDATE') {
+        const candidate = event.payload?.candidate;
         if (candidate) {
           if (pc.remoteDescription && pc.remoteDescription.type) {
             pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
@@ -575,10 +575,12 @@ export function AttendancePage() {
           }
         }
       }
-    };
+    });
 
-    handleAdminWebRTC();
-  }, [lastEvent, isWatchingLiveStream, selectedAdminEmployeeId, sendMessage]);
+    return () => {
+      unsubscribe();
+    };
+  }, [isWatchingLiveStream, selectedAdminEmployeeId, sendMessage, subscribe]);
 
   const startWatchingLiveStream = () => {
     if (!selectedAdminEmployeeId) return;
