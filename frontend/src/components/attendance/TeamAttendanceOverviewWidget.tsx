@@ -9,10 +9,14 @@ import {
   ChevronRight, 
   Search
 } from 'lucide-react';
+import { useAuthStore } from '../../store/authStore';
 import api from '../../lib/api';
 import { DailyActivityInspectorModal } from './DailyActivityInspectorModal';
 
 export function TeamAttendanceOverviewWidget() {
+  const { user } = useAuthStore();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CHECKED_IN' | 'CHECKED_OUT' | 'NOT_STARTED'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,8 +30,11 @@ export function TeamAttendanceOverviewWidget() {
       });
       return res.data;
     },
+    enabled: isSuperAdmin,
     refetchInterval: 30000,
   });
+
+  if (!isSuperAdmin) return null;
 
   const roster = data?.roster || [];
   const stats = data?.stats || {
