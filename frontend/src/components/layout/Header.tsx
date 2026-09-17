@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Plus, Shield, Building2, Ticket, CheckSquare, ChevronDown, CheckCircle2, FolderPlus, Menu, Sun, Moon, LogOut, Camera } from 'lucide-react';
+import { Bell, Plus, Shield, Building2, Ticket, CheckSquare, ChevronDown, CheckCircle2, FolderPlus, Menu, Sun, Moon, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { CreateTaskModal } from '../tasks/CreateTaskModal';
 import { RaiseTicketModal } from '../tickets/RaiseTicketModal';
@@ -168,16 +168,7 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
               <CheckCircle2 size={13} className="text-blue-500" />
               <span>Shift Done ({attendanceData?.attendance?.workHours || 0}h)</span>
             </div>
-          ) : (
-            <button
-              onClick={() => setIsAttendanceCheckInModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/40 hover:bg-amber-500/20 transition shadow-sm"
-              title="Attendance Check-In Required: Camera Verification"
-            >
-              <Camera size={13} />
-              <span>Check In</span>
-            </button>
-          )}
+          ) : null}
 
           {/* Role-Aware Multi-Action + Create Button */}
           <div className="relative" ref={dropdownRef}>

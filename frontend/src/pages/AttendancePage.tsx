@@ -262,10 +262,13 @@ export function AttendancePage() {
       const res = await api.post('/attendance/mark');
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Attendance marked for today!');
       refetchToday();
       queryClient.invalidateQueries({ queryKey: ['attendance-my-history'] });
+      try {
+        await requestInitialScreenShare();
+      } catch {}
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.error || 'Failed to mark attendance');
@@ -541,6 +544,9 @@ export function AttendancePage() {
           if (ok) {
             startWorkingMutation.mutate();
           }
+          try {
+            await requestInitialScreenShare();
+          } catch {}
         },
       });
       return;
@@ -550,6 +556,9 @@ export function AttendancePage() {
       if (ok) {
         startWorkingMutation.mutate();
       }
+      try {
+        await requestInitialScreenShare();
+      } catch {}
       return;
     }
     if (currentState === 'ON_BREAK') {
