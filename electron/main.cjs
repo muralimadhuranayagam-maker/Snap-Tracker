@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, session, Tray, Menu } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, session, Tray, Menu, desktopCapturer } = require('electron');
 const path = require('path');
 const http = require('http');
 
@@ -26,15 +26,31 @@ function createWindow() {
     },
   });
 
-  // Grant microphone and media permissions for Team Live Chat voice recording & WebRTC
+  // Grant microphone, media, and screen permissions natively for Desktop App
   session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const allowedPermissions = ['media', 'audioCapture', 'notifications', 'fullscreen'];
+    const allowedPermissions = ['media', 'audioCapture', 'notifications', 'fullscreen', 'displayCapture'];
     if (allowedPermissions.includes(permission)) {
       callback(true);
     } else {
       callback(false);
     }
   });
+
+  // Handle getDisplayMedia natively inside Desktop App without browser prompt dialog
+  if (session.defaultSession.setDisplayMediaRequestHandler) {
+    session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+      desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
+        if (sources.length > 0) {
+          callback({ video: sources[0] });
+        } else {
+          callback({});
+        }
+      }).catch((err) => {
+        console.error('[Electron] Native desktop capturer error:', err);
+        callback({});
+      });
+    });
+  }
 
   // Open external links in default system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
