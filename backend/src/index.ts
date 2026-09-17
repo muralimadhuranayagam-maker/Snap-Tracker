@@ -148,7 +148,6 @@ app.use('/api/workload', workloadRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/api/attendance', attendanceRoutes); // Fallback for double-prefixed client requests
-app.use('/attendance', attendanceRoutes);
 app.use('/api/leaves', leavesRoutes);
 
 // 404 handler for API routes
