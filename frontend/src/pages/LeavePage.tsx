@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock,
   FileText, TrendingUp, CalendarCheck, CalendarX, RefreshCw,
-  Check, X, Trash2,
+  Check, X, Trash2, Calendar, ArrowUpDown,
 } from 'lucide-react';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -225,6 +225,8 @@ export function LeavePage() {
 
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [activeAdminTab, setActiveAdminTab] = useState<'pending' | 'all'>('pending');
+  const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('ALL');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [actionModal, setActionModal] = useState<{ action: 'approve' | 'reject'; leave: any } | null>(null);
 
   // Fetch leave types
@@ -242,7 +244,43 @@ export function LeavePage() {
     enabled: isSuperAdmin,
   });
 
-  const pendingLeaves = adminLeaves.filter((l: any) => l.status === 'PENDING');
+  // Extract unique available months (YYYY-MM) from adminLeaves
+  const availableMonths = useMemo(() => {
+    const map = new Map<string, string>();
+    adminLeaves.forEach((l: any) => {
+      if (l.startDate) {
+        const d = new Date(l.startDate);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const label = d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+        if (!map.has(key)) map.set(key, label);
+      }
+    });
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [adminLeaves]);
+
+  // Filter and sort admin leaves by month and date order
+  const filteredAdminLeaves = useMemo(() => {
+    let list = [...adminLeaves];
+
+    if (selectedMonthFilter !== 'ALL') {
+      list = list.filter((l: any) => {
+        if (!l.startDate) return false;
+        const d = new Date(l.startDate);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return key === selectedMonthFilter;
+      });
+    }
+
+    list.sort((a: any, b: any) => {
+      const timeA = new Date(a.startDate || a.createdAt).getTime();
+      const timeB = new Date(b.startDate || b.createdAt).getTime();
+      return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+    });
+
+    return list;
+  }, [adminLeaves, selectedMonthFilter, sortOrder]);
+
+  const pendingLeaves = filteredAdminLeaves.filter((l: any) => l.status === 'PENDING');
 
   // Approve/reject mutations
   const approveMutation = useMutation({
@@ -419,10 +457,10 @@ export function LeavePage() {
           {/* Stats Row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '14px' }}>
             {[
-              { label: 'Total Requests', value: adminLeaves.length, color: '#a5b4fc' },
+              { label: 'Total Requests', value: filteredAdminLeaves.length, color: '#a5b4fc' },
               { label: 'Pending', value: pendingLeaves.length, color: '#fbbf24' },
-              { label: 'Approved', value: adminLeaves.filter((l: any) => l.status === 'APPROVED').length, color: '#4ade80' },
-              { label: 'Rejected', value: adminLeaves.filter((l: any) => l.status === 'REJECTED').length, color: '#f87171' },
+              { label: 'Approved', value: filteredAdminLeaves.filter((l: any) => l.status === 'APPROVED').length, color: '#4ade80' },
+              { label: 'Rejected', value: filteredAdminLeaves.filter((l: any) => l.status === 'REJECTED').length, color: '#f87171' },
             ].map(s => (
               <div key={s.label} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '14px', padding: '16px 20px' }}>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '6px' }}>{s.label}</div>
@@ -431,21 +469,59 @@ export function LeavePage() {
             ))}
           </div>
 
-          {/* Tab Bar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.04)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border-default)', width: 'fit-content' }}>
-            {(['pending', 'all'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveAdminTab(tab)}
-                style={{
-                  padding: '7px 18px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '12px', textTransform: 'capitalize', transition: 'all 0.15s',
-                  background: activeAdminTab === tab ? '#ffffff' : 'transparent',
-                  color: activeAdminTab === tab ? '#000000' : 'var(--text-muted)',
-                }}
-              >
-                {tab === 'pending' ? `⏳ Pending (${pendingLeaves.length})` : '📋 All Requests'}
-              </button>
-            ))}
+          {/* Controls Bar: Tabs + Month Filter + Sorting */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            {/* Tab Bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.04)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border-default)', width: 'fit-content' }}>
+              {(['pending', 'all'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveAdminTab(tab)}
+                  style={{
+                    padding: '7px 18px', borderRadius: '9px', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: '12px', textTransform: 'capitalize', transition: 'all 0.15s',
+                    background: activeAdminTab === tab ? '#ffffff' : 'transparent',
+                    color: activeAdminTab === tab ? '#000000' : 'var(--text-muted)',
+                  }}
+                >
+                  {tab === 'pending' ? `⏳ Pending (${pendingLeaves.filter((l: any) => l.status === 'PENDING').length})` : `📋 All Requests (${filteredAdminLeaves.length})`}
+                </button>
+              ))}
+            </div>
+
+            {/* Filters & Sorting */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              {/* Month Filter Dropdown */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', padding: '6px 14px', borderRadius: '10px', fontSize: '12px' }}>
+                <Calendar size={14} style={{ color: '#818cf8' }} />
+                <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Month:</span>
+                <select
+                  value={selectedMonthFilter}
+                  onChange={(e) => setSelectedMonthFilter(e.target.value)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-h)', fontWeight: 600, fontSize: '12px', outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="ALL" style={{ background: 'var(--bg-surface)', color: 'var(--text-h)' }}>All Months</option>
+                  {availableMonths.map(([key, label]) => (
+                    <option key={key} value={key} style={{ background: 'var(--bg-surface)', color: 'var(--text-h)' }}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sort Order Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-surface)', border: '1px solid var(--border-default)', padding: '6px 14px', borderRadius: '10px', fontSize: '12px' }}>
+                <ArrowUpDown size={14} style={{ color: '#818cf8' }} />
+                <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Sort:</span>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-h)', fontWeight: 600, fontSize: '12px', outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="desc" style={{ background: 'var(--bg-surface)', color: 'var(--text-h)' }}>Newest First</option>
+                  <option value="asc" style={{ background: 'var(--bg-surface)', color: 'var(--text-h)' }}>Oldest First</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* Leave Requests Table */}
