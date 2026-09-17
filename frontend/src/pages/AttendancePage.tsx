@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
@@ -26,7 +26,8 @@ import {
   Search,
   X,
   History,
-  Handshake
+  Handshake,
+  RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -39,6 +40,58 @@ function formatDuration(totalSeconds: number): string {
   return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+// Component to handle individual employee camera video stream tile in multi-grid wall
+function MediaVideoTile({
+  stream,
+  isConnecting,
+  error,
+  onReconnect,
+}: {
+  stream?: MediaStream;
+  isConnecting?: boolean;
+  error?: string;
+  onReconnect: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [stream]);
+
+  return (
+    <div className="relative w-full aspect-video rounded-xl bg-black overflow-hidden flex items-center justify-center border border-border/40 shadow-inner">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="w-full h-full object-cover"
+      />
+      {isConnecting && (
+        <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 p-3 text-center">
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-indigo-300 font-semibold">Connecting WebRTC Stream...</span>
+        </div>
+      )}
+      {error && !isConnecting && (
+        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center gap-2 p-3 text-center">
+          <AlertTriangle className="w-7 h-7 text-amber-400 animate-bounce" />
+          <p className="text-xs text-amber-200 font-medium">{error}</p>
+          <button
+            onClick={onReconnect}
+            className="px-3 py-1 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow transition-all cursor-pointer"
+          >
+            Reconnect
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AttendancePage() {
   const { user: currentUser } = useAuthStore();
   const { isConnected } = useWebSocket();
@@ -47,7 +100,7 @@ export function AttendancePage() {
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
   const [activeTab, setActiveTab] = useState<'my_attendance' | 'admin_activity'>(isSuperAdmin ? 'admin_activity' : 'my_attendance');
 
-  // Super Admin Live WebRTC Camera Stream state
+  // Super Admin Live WebRTC Camera Stream state (Single)
   const [isWatchingLiveStream, setIsWatchingLiveStream] = useState(false);
   const [liveStreamConnecting, setLiveStreamConnecting] = useState(false);
   const [liveStreamError, setLiveStreamError] = useState<string | null>(null);
@@ -55,6 +108,16 @@ export function AttendancePage() {
   const adminLiveVideoRef = useRef<HTMLVideoElement | null>(null);
   const adminPendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const liveStreamTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Super Admin Live WebRTC Camera Grid state (Multi-Stream)
+  const [showMultiLiveMonitor, setShowMultiLiveMonitor] = useState(false);
+  const [multiStreamsMap, setMultiStreamsMap] = useState<Map<string, MediaStream>>(new Map());
+  const [multiConnectingMap, setMultiConnectingMap] = useState<Map<string, boolean>>(new Map());
+  const [multiErrorMap, setMultiErrorMap] = useState<Map<string, string>>(new Map());
+  const multiPeersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const multiPendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+  const multiTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
   const { sendMessage, subscribe } = useWebSocket();
 
   // Shared background camera and face presence session
@@ -535,35 +598,42 @@ export function AttendancePage() {
     enabled: Boolean(isSuperAdmin && selectedAdminEmployeeId),
   });
 
-  // Listen for WebRTC signals from employee
+  // Listen for WebRTC signals from employee (Single & Multi-Stream)
   useEffect(() => {
-    if (!isWatchingLiveStream) return;
+    if (!isWatchingLiveStream && !showMultiLiveMonitor) return;
 
     const unsubscribe = subscribe(async (event) => {
-      const pc = adminPeerConnRef.current;
+      const senderId = event.payload?.senderId;
+      if (!senderId) return;
+
+      const pc = (isWatchingLiveStream && selectedAdminEmployeeId === senderId)
+        ? adminPeerConnRef.current
+        : multiPeersRef.current.get(senderId);
+
       if (!pc) return;
 
       if (event.type === 'WEBRTC_OFFER') {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(event.payload.offer));
-          // Process any queued candidates that arrived prior to remote description set
-          while (adminPendingIceCandidatesRef.current.length > 0) {
-            const cand = adminPendingIceCandidatesRef.current.shift();
+          const pending = (isWatchingLiveStream && selectedAdminEmployeeId === senderId)
+            ? adminPendingIceCandidatesRef.current
+            : (multiPendingCandidatesRef.current.get(senderId) || []);
+
+          while (pending.length > 0) {
+            const cand = pending.shift();
             if (cand) {
               await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
             }
           }
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          if (selectedAdminEmployeeId) {
-            sendMessage({
-              type: 'WEBRTC_ANSWER',
-              targetUserId: selectedAdminEmployeeId,
-              payload: { answer },
-            });
-          }
+          sendMessage({
+            type: 'WEBRTC_ANSWER',
+            targetUserId: senderId,
+            payload: { answer },
+          });
         } catch (err) {
-          console.error('[Admin WebRTC] Failed to handle offer:', err);
+          console.error('[Admin WebRTC] Failed to process offer:', err);
         }
       } else if (event.type === 'WEBRTC_ICE_CANDIDATE') {
         const candidate = event.payload?.candidate;
@@ -571,7 +641,13 @@ export function AttendancePage() {
           if (pc.remoteDescription && pc.remoteDescription.type) {
             pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
           } else {
-            adminPendingIceCandidatesRef.current.push(candidate);
+            if (isWatchingLiveStream && selectedAdminEmployeeId === senderId) {
+              adminPendingIceCandidatesRef.current.push(candidate);
+            } else {
+              const queue = multiPendingCandidatesRef.current.get(senderId) || [];
+              queue.push(candidate);
+              multiPendingCandidatesRef.current.set(senderId, queue);
+            }
           }
         }
       }
@@ -580,7 +656,7 @@ export function AttendancePage() {
     return () => {
       unsubscribe();
     };
-  }, [isWatchingLiveStream, selectedAdminEmployeeId, sendMessage, subscribe]);
+  }, [isWatchingLiveStream, showMultiLiveMonitor, selectedAdminEmployeeId, sendMessage, subscribe]);
 
   const startWatchingLiveStream = () => {
     if (!selectedAdminEmployeeId) return;
@@ -675,6 +751,127 @@ export function AttendancePage() {
     setIsWatchingLiveStream(false);
     setLiveStreamConnecting(false);
     setLiveStreamError(null);
+  };
+
+  // Connect single stream for Multi Live Monitor grid tile
+  const connectSingleMultiEmployeeStream = useCallback((targetUserId: string) => {
+    const existing = multiPeersRef.current.get(targetUserId);
+    if (existing) {
+      try { existing.close(); } catch {}
+    }
+
+    const rtcConfig: RTCConfiguration = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+      ],
+    };
+
+    const pc = new RTCPeerConnection(rtcConfig);
+    multiPeersRef.current.set(targetUserId, pc);
+    multiPendingCandidatesRef.current.set(targetUserId, []);
+
+    setMultiConnectingMap((prev) => new Map(prev).set(targetUserId, true));
+    setMultiErrorMap((prev) => {
+      const next = new Map(prev);
+      next.delete(targetUserId);
+      return next;
+    });
+
+    pc.ontrack = (event) => {
+      const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
+      setMultiStreamsMap((prev) => new Map(prev).set(targetUserId, stream));
+      setMultiConnectingMap((prev) => new Map(prev).set(targetUserId, false));
+      setMultiErrorMap((prev) => {
+        const next = new Map(prev);
+        next.delete(targetUserId);
+        return next;
+      });
+      const t = multiTimeoutsRef.current.get(targetUserId);
+      if (t) {
+        clearTimeout(t);
+        multiTimeoutsRef.current.delete(targetUserId);
+      }
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        sendMessage({
+          type: 'WEBRTC_ICE_CANDIDATE',
+          targetUserId,
+          payload: { candidate: event.candidate },
+        });
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        setMultiConnectingMap((prev) => new Map(prev).set(targetUserId, false));
+        const t = multiTimeoutsRef.current.get(targetUserId);
+        if (t) {
+          clearTimeout(t);
+          multiTimeoutsRef.current.delete(targetUserId);
+        }
+      } else if (pc.iceConnectionState === 'failed') {
+        setMultiConnectingMap((prev) => new Map(prev).set(targetUserId, false));
+        setMultiErrorMap((prev) => new Map(prev).set(targetUserId, 'Stream connection failed or dropped.'));
+      }
+    };
+
+    sendMessage({
+      type: 'WEBRTC_REQUEST_STREAM',
+      targetUserId,
+      payload: { adminName: currentUser?.name || 'Super Admin' },
+    });
+
+    const timeout = setTimeout(() => {
+      if (pc.iceConnectionState !== 'connected' && pc.iceConnectionState !== 'completed') {
+        setMultiConnectingMap((prev) => new Map(prev).set(targetUserId, false));
+        setMultiErrorMap((prev) => new Map(prev).set(targetUserId, 'Employee camera is offline or unreachable.'));
+      }
+    }, 12000);
+    multiTimeoutsRef.current.set(targetUserId, timeout);
+  }, [currentUser, sendMessage]);
+
+  const openMultiLiveMonitor = () => {
+    setShowMultiLiveMonitor(true);
+    setMultiStreamsMap(new Map());
+    setMultiConnectingMap(new Map());
+    setMultiErrorMap(new Map());
+
+    const activeWorkingEmps = (adminActivityData?.employees || []).filter(
+      (emp: any) => emp.currentState === 'WORKING' || emp.currentState === 'IN_MEETING'
+    );
+
+    activeWorkingEmps.forEach((emp: any) => {
+      connectSingleMultiEmployeeStream(emp.user.id);
+    });
+  };
+
+  const closeMultiLiveMonitor = () => {
+    multiPeersRef.current.forEach((pc, targetUserId) => {
+      try {
+        sendMessage({
+          type: 'WEBRTC_STOP_STREAM',
+          targetUserId,
+          payload: {},
+        });
+        pc.close();
+      } catch {}
+    });
+
+    multiTimeoutsRef.current.forEach((t) => clearTimeout(t));
+    multiTimeoutsRef.current.clear();
+    multiPeersRef.current.clear();
+    multiPendingCandidatesRef.current.clear();
+
+    setMultiStreamsMap(new Map());
+    setMultiConnectingMap(new Map());
+    setMultiErrorMap(new Map());
+    setShowMultiLiveMonitor(false);
   };
 
   const filteredAdminEmployees = useMemo(() => {
@@ -782,7 +979,7 @@ export function AttendancePage() {
 
         {/* Super Admin Navigation Toggle */}
         {isSuperAdmin && (
-          <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/40">
+          <div className="flex items-center gap-1.5 bg-muted/40 p-1 rounded-xl border border-border/40">
             <button
               onClick={() => setActiveTab('my_attendance')}
               className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
@@ -803,6 +1000,14 @@ export function AttendancePage() {
             >
               <Activity size={13} />
               Activity Monitoring
+            </button>
+            <button
+              onClick={openMultiLiveMonitor}
+              className="px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 hover:from-red-500 hover:to-rose-500 text-white shadow-md shadow-red-500/25 border border-red-400/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            >
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              <Video size={13} />
+              <span>Live Monitor (all)</span>
             </button>
           </div>
         )}
@@ -1998,6 +2203,107 @@ export function AttendancePage() {
             <div className="text-[11px] text-muted-foreground italic border-t border-border/40 pt-3 text-center">
               "Activity analytics are informational only and do not determine official working hours."
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 4: SUPER_ADMIN LIVE MONITOR (ALL) MULTI-CAM GRID WALL          */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {showMultiLiveMonitor && createPortal(
+        <div className="fixed inset-0 z-[999999] bg-slate-950/95 backdrop-blur-md flex flex-col p-4 md:p-6 overflow-hidden animate-in fade-in duration-200">
+          {/* Top Header */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 text-white shadow-lg shadow-red-500/30">
+                <Video size={22} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-white flex items-center gap-2.5">
+                  🔴 Live Team Camera Grid Wall
+                  <span className="px-2.5 py-0.5 rounded-full text-xs bg-red-500/20 text-red-300 border border-red-500/30 font-semibold">
+                    {(adminActivityData?.employees || []).filter((e: any) => e.currentState === 'WORKING' || e.currentState === 'IN_MEETING').length} Currently Working
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Real-time multi-camera split-screen monitoring wall for Super Admin
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={openMultiLiveMonitor}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw size={14} /> Refresh All Feeds
+              </button>
+              <button
+                onClick={closeMultiLiveMonitor}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Grid Wall */}
+          <div className="flex-1 overflow-y-auto pr-1">
+            {(() => {
+              const activeEmps = (adminActivityData?.employees || []).filter(
+                (emp: any) => emp.currentState === 'WORKING' || emp.currentState === 'IN_MEETING'
+              );
+
+              if (activeEmps.length === 0) {
+                return (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-12 text-slate-400 gap-3">
+                    <CameraOff size={44} className="text-slate-600" />
+                    <h3 className="text-base font-bold text-white">No Employees Currently Working</h3>
+                    <p className="text-xs max-w-sm text-slate-400">
+                      There are no active working sessions right now. As employees clock in and begin working, their live feeds will automatically populate in this grid wall.
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+                  {activeEmps.map((emp: any) => {
+                    const stream = multiStreamsMap.get(emp.user.id);
+                    const isConnecting = multiConnectingMap.get(emp.user.id) ?? !stream;
+                    const error = multiErrorMap.get(emp.user.id);
+
+                    return (
+                      <div
+                        key={emp.user.id}
+                        className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl hover:border-slate-700 transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-sm">
+                              {emp.user.name?.charAt(0) || 'U'}
+                            </div>
+                            <div className="overflow-hidden">
+                              <div className="text-xs font-bold text-white truncate">{emp.user.name}</div>
+                              <div className="text-[10px] text-slate-400 truncate">{emp.user.email}</div>
+                            </div>
+                          </div>
+                          {getStateBadge(emp.currentState)}
+                        </div>
+
+                        <MediaVideoTile
+                          stream={stream}
+                          isConnecting={isConnecting}
+                          error={error}
+                          onReconnect={() => connectSingleMultiEmployeeStream(emp.user.id)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>,
         document.body
