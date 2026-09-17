@@ -47,6 +47,13 @@ export function AttendancePage() {
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
   const [activeTab, setActiveTab] = useState<'my_attendance' | 'admin_activity'>(isSuperAdmin ? 'admin_activity' : 'my_attendance');
 
+  // Super Admin Live WebRTC Camera Stream state
+  const [isWatchingLiveStream, setIsWatchingLiveStream] = useState(false);
+  const [liveStreamConnecting, setLiveStreamConnecting] = useState(false);
+  const adminPeerConnRef = useRef<RTCPeerConnection | null>(null);
+  const adminLiveVideoRef = useRef<HTMLVideoElement | null>(null);
+  const { sendMessage, lastEvent } = useWebSocket();
+
   // Shared background camera and face presence session
   const {
     isVideoActive,
@@ -524,6 +531,81 @@ export function AttendancePage() {
     },
     enabled: Boolean(isSuperAdmin && selectedAdminEmployeeId),
   });
+
+  // Listen for WebRTC signals from employee
+  useEffect(() => {
+    if (!lastEvent || !isWatchingLiveStream) return;
+
+    if (lastEvent.type === 'WEBRTC_OFFER' && adminPeerConnRef.current) {
+      const pc = adminPeerConnRef.current;
+      pc.setRemoteDescription(new RTCSessionDescription(lastEvent.payload.offer))
+        .then(() => pc.createAnswer())
+        .then((answer) => {
+          pc.setLocalDescription(answer);
+          if (selectedAdminEmployeeId) {
+            sendMessage({
+              type: 'WEBRTC_ANSWER',
+              targetUserId: selectedAdminEmployeeId,
+              payload: { answer },
+            });
+          }
+        })
+        .catch(() => {});
+    } else if (lastEvent.type === 'WEBRTC_ICE_CANDIDATE' && adminPeerConnRef.current) {
+      adminPeerConnRef.current.addIceCandidate(new RTCIceCandidate(lastEvent.payload.candidate)).catch(() => {});
+    }
+  }, [lastEvent, isWatchingLiveStream, selectedAdminEmployeeId, sendMessage]);
+
+  const startWatchingLiveStream = () => {
+    if (!selectedAdminEmployeeId) return;
+    setIsWatchingLiveStream(true);
+    setLiveStreamConnecting(true);
+
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    });
+    adminPeerConnRef.current = pc;
+
+    pc.ontrack = (event) => {
+      setLiveStreamConnecting(false);
+      if (adminLiveVideoRef.current && event.streams[0]) {
+        adminLiveVideoRef.current.srcObject = event.streams[0];
+        adminLiveVideoRef.current.play().catch(() => {});
+      }
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && selectedAdminEmployeeId) {
+        sendMessage({
+          type: 'WEBRTC_ICE_CANDIDATE',
+          targetUserId: selectedAdminEmployeeId,
+          payload: { candidate: event.candidate },
+        });
+      }
+    };
+
+    sendMessage({
+      type: 'WEBRTC_REQUEST_STREAM',
+      targetUserId: selectedAdminEmployeeId,
+      payload: { adminName: currentUser?.name || 'Super Admin' },
+    });
+  };
+
+  const stopWatchingLiveStream = () => {
+    if (selectedAdminEmployeeId) {
+      sendMessage({
+        type: 'WEBRTC_STOP_STREAM',
+        targetUserId: selectedAdminEmployeeId,
+        payload: {},
+      });
+    }
+    if (adminPeerConnRef.current) {
+      adminPeerConnRef.current.close();
+      adminPeerConnRef.current = null;
+    }
+    setIsWatchingLiveStream(false);
+    setLiveStreamConnecting(false);
+  };
 
   const filteredAdminEmployees = useMemo(() => {
     if (!adminActivityData?.employees) return [];
@@ -1631,13 +1713,60 @@ export function AttendancePage() {
                 </div>
               </div>
 
-              <button
-                onClick={() => setSelectedAdminEmployeeId(null)}
-                className="p-2 rounded-xl text-muted-foreground hover:bg-muted/40 transition-colors"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                {!isWatchingLiveStream ? (
+                  <button
+                    onClick={startWatchingLiveStream}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all"
+                  >
+                    <Video size={14} /> Watch Live Camera
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopWatchingLiveStream}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1.5 shadow-md shadow-rose-600/20 transition-all"
+                  >
+                    <Square size={14} /> Stop Stream
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    stopWatchingLiveStream();
+                    setSelectedAdminEmployeeId(null);
+                  }}
+                  className="p-2 rounded-xl text-muted-foreground hover:bg-muted/40 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
+
+            {/* Live Video Player Stream Box */}
+            {isWatchingLiveStream && (
+              <div className="p-4 rounded-xl bg-black border border-indigo-500/30 space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-indigo-400 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping" />
+                    {liveStreamConnecting ? 'Connecting to employee live camera...' : '🔴 Real-Time WebRTC Live Camera Feed'}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">Visible notification active on employee screen</span>
+                </div>
+                <div className="relative aspect-video rounded-lg overflow-hidden bg-muted/40 flex items-center justify-center max-h-64">
+                  <video
+                    ref={adminLiveVideoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  {liveStreamConnecting && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 gap-2">
+                      <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs text-indigo-300 font-semibold">Establishing WebRTC Stream...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Split Sections: Official Work vs Admin Activity */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

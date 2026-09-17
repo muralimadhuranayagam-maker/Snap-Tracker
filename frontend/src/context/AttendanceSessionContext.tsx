@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { FacePresenceDetector } from '../services/faceDetection';
 import { globalActivityTracker } from '../services/activityTracker';
 import { useAuthStore } from '../store/authStore';
+import { useWebSocket } from './WebSocketContext';
 import api from '../lib/api';
 
 interface AttendanceSessionContextType {
@@ -383,6 +384,62 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
     };
   }, [stopCamera]);
 
+  // WebRTC Streaming State (Employee Side)
+  const { lastEvent, sendMessage } = useWebSocket();
+  const [isBeingStreamed, setIsBeingStreamed] = useState(false);
+  const [streamedByAdminName, setStreamedByAdminName] = useState('');
+  const peerConnRef = useRef<RTCPeerConnection | null>(null);
+
+  useEffect(() => {
+    if (!lastEvent) return;
+
+    if (lastEvent.type === 'WEBRTC_REQUEST_STREAM') {
+      const { senderId, senderName } = lastEvent.payload || {};
+      setStreamedByAdminName(senderName || 'Super Admin');
+      setIsBeingStreamed(true);
+
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+      peerConnRef.current = pc;
+
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => {
+          pc.addTrack(track, mediaStreamRef.current!);
+        });
+      }
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          sendMessage({
+            type: 'WEBRTC_ICE_CANDIDATE',
+            targetUserId: senderId,
+            payload: { candidate: e.candidate },
+          });
+        }
+      };
+
+      pc.createOffer().then((offer) => {
+        pc.setLocalDescription(offer);
+        sendMessage({
+          type: 'WEBRTC_OFFER',
+          targetUserId: senderId,
+          payload: { offer },
+        });
+      }).catch(() => {});
+    } else if (lastEvent.type === 'WEBRTC_ANSWER' && peerConnRef.current) {
+      peerConnRef.current.setRemoteDescription(new RTCSessionDescription(lastEvent.payload.answer)).catch(() => {});
+    } else if (lastEvent.type === 'WEBRTC_ICE_CANDIDATE' && peerConnRef.current) {
+      peerConnRef.current.addIceCandidate(new RTCIceCandidate(lastEvent.payload.candidate)).catch(() => {});
+    } else if (lastEvent.type === 'WEBRTC_STOP_STREAM') {
+      if (peerConnRef.current) {
+        peerConnRef.current.close();
+        peerConnRef.current = null;
+      }
+      setIsBeingStreamed(false);
+    }
+  }, [lastEvent, sendMessage]);
+
   return (
     <AttendanceSessionContext.Provider
       value={{
@@ -399,6 +456,31 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         mediaStream: mediaStreamRef.current,
       }}
     >
+      {/* Active Live Stream Notification Banner (Transparent & Visible for Employee) */}
+      {isBeingStreamed && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '16px',
+            right: '16px',
+            zIndex: 999999,
+            background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+            color: '#ffffff',
+            padding: '10px 18px',
+            borderRadius: '30px',
+            boxShadow: '0 10px 30px rgba(220, 38, 38, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            fontSize: '12px',
+            fontWeight: 700,
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+          }}
+        >
+          <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ffffff', animation: 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite' }} />
+          <span>🔴 LIVE STREAMING ACTIVE — {streamedByAdminName} is viewing your live camera feed</span>
+        </div>
+      )}
       {children}
     </AttendanceSessionContext.Provider>
   );

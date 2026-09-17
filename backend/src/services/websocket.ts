@@ -33,6 +33,24 @@ export function setupWebSocket(wss: WebSocketServer) {
 
       ws.send(JSON.stringify({ type: 'CONNECTED', message: 'Real-time connected' }));
 
+      ws.on('message', (messageRaw) => {
+        try {
+          const parsed = JSON.parse(messageRaw.toString());
+          if (parsed.type?.startsWith('WEBRTC_') && parsed.targetUserId) {
+            broadcastToUser(parsed.targetUserId, {
+              type: parsed.type,
+              payload: {
+                senderId: decoded.userId,
+                senderName: decoded.name || 'User',
+                ...parsed.payload,
+              },
+            });
+          }
+        } catch (err) {
+          console.error('[WS] Message parse error:', err);
+        }
+      });
+
       ws.on('close', () => {
         clients.delete(clientId);
       });
