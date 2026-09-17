@@ -1506,11 +1506,34 @@ export function AttendancePage() {
       {/* ─────────────────────────────────────────────────────────────────── */}
       {showConsentModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
           onClick={() => setShowConsentModal(false)}
         >
           <div
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-4"
+            style={{
+              width: '100%',
+              maxWidth: '480px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              background: '#121216',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '20px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+              padding: '24px',
+            }}
+            className="space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 text-primary">
@@ -1518,17 +1541,17 @@ export function AttendancePage() {
                 <ScanFace size={24} />
               </div>
               <div>
-                <h3 className="text-base font-bold text-foreground">Camera Access & Privacy Notice</h3>
+                <h3 className="text-base font-bold text-white">Camera Access & Privacy Notice</h3>
                 <p className="text-xs text-muted-foreground">Required for active face verification</p>
               </div>
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Camera access is required to verify active work sessions. Face detection is used only to determine whether a human face is visible in front of your device. Camera video is strictly analyzed locally in memory and is <span className="font-semibold text-foreground">never stored, recorded, or uploaded</span>.
+              Camera access is required to verify active work sessions. Face detection is used only to determine whether a human face is visible in front of your device. Camera video is strictly analyzed locally in memory and is <span className="font-semibold text-white">never stored, recorded, or uploaded</span>.
             </p>
 
             <div className="p-3 rounded-xl bg-muted/40 border border-border/40 space-y-1.5 text-xs">
-              <div className="flex items-center gap-2 text-foreground font-semibold">
+              <div className="flex items-center gap-2 text-white font-semibold">
                 <ShieldCheck size={14} className="text-emerald-400" />
                 <span>Zero Biometric Template Storage</span>
               </div>
@@ -1560,11 +1583,34 @@ export function AttendancePage() {
       {/* ─────────────────────────────────────────────────────────────────── */}
       {showEndConfirmModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
           onClick={() => setShowEndConfirmModal(false)}
         >
           <div
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-4"
+            style={{
+              width: '100%',
+              maxWidth: '480px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              background: '#121216',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '20px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+              padding: '24px',
+            }}
+            className="space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 text-rose-400">
@@ -1572,13 +1618,13 @@ export function AttendancePage() {
                 <Square size={24} />
               </div>
               <div>
-                <h3 className="text-base font-bold text-foreground">End Workday Confirmation</h3>
+                <h3 className="text-base font-bold text-white">End Workday Confirmation</h3>
                 <p className="text-xs text-muted-foreground">Finalize today's attendance session</p>
               </div>
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Are you sure you want to end your workday? All camera tracks and working intervals will be stopped. <span className="font-semibold text-foreground">You will not be able to start another working session today.</span>
+              Are you sure you want to end your workday? All camera tracks and working intervals will be stopped. <span className="font-semibold text-white">You will not be able to start another working session today.</span>
             </p>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">
@@ -1605,11 +1651,34 @@ export function AttendancePage() {
       {/* ─────────────────────────────────────────────────────────────────── */}
       {selectedAdminEmployeeId && selectedEmployeeDetails && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
           onClick={() => setSelectedAdminEmployeeId(null)}
         >
           <div
-            className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-6"
+            style={{
+              width: '100%',
+              maxWidth: '820px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              background: '#121216',
+              color: '#ffffff',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '20px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
+              padding: '24px',
+            }}
+            className="space-y-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-border/40 pb-4">
@@ -1618,7 +1687,7 @@ export function AttendancePage() {
                   {selectedEmployeeDetails.employee.name.charAt(0)}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
                     {selectedEmployeeDetails.employee.name}
                     {getStateBadge(selectedEmployeeDetails.officialAttendance.currentState)}
                   </h3>
@@ -1648,7 +1717,7 @@ export function AttendancePage() {
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between py-1 border-b border-border/20">
                     <span className="text-muted-foreground">Clock In:</span>
-                    <span className="font-mono font-medium">
+                    <span className="font-mono font-medium text-white">
                       {selectedEmployeeDetails.officialAttendance.clockIn
                         ? new Date(selectedEmployeeDetails.officialAttendance.clockIn).toLocaleTimeString()
                         : '—'}
@@ -1656,7 +1725,7 @@ export function AttendancePage() {
                   </div>
                   <div className="flex justify-between py-1 border-b border-border/20">
                     <span className="text-muted-foreground">Clock Out:</span>
-                    <span className="font-mono font-medium">
+                    <span className="font-mono font-medium text-white">
                       {selectedEmployeeDetails.officialAttendance.clockOut
                         ? new Date(selectedEmployeeDetails.officialAttendance.clockOut).toLocaleTimeString()
                         : '—'}
@@ -1717,13 +1786,13 @@ export function AttendancePage() {
                   </div>
                   <div className="flex justify-between py-1 border-b border-border/20">
                     <span className="text-muted-foreground">Mouse Clicks:</span>
-                    <span className="font-mono font-bold">
+                    <span className="font-mono font-bold text-white">
                       {selectedEmployeeDetails.activityAnalytics.mouseClickCount.toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-border/20">
                     <span className="text-muted-foreground">Keyboard Events:</span>
-                    <span className="font-mono font-bold">
+                    <span className="font-mono font-bold text-white">
                       {selectedEmployeeDetails.activityAnalytics.keyboardEventCount.toLocaleString()}
                     </span>
                   </div>
@@ -1758,7 +1827,7 @@ export function AttendancePage() {
                         <span className="font-mono text-[11px] text-muted-foreground">
                           {new Date(evt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </span>
-                        <span className="font-medium text-foreground">{evt.type.replace(/_/g, ' ')}</span>
+                        <span className="font-medium text-white">{evt.type.replace(/_/g, ' ')}</span>
                       </div>
                       {evt.metadata && (
                         <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">
