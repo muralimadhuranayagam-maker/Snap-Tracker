@@ -2212,98 +2212,126 @@ export function AttendancePage() {
       {/* MODAL 4: SUPER_ADMIN LIVE MONITOR (ALL) MULTI-CAM GRID WALL          */}
       {/* ─────────────────────────────────────────────────────────────────── */}
       {showMultiLiveMonitor && createPortal(
-        <div className="fixed inset-0 z-[999999] bg-slate-950/95 backdrop-blur-md flex flex-col p-4 md:p-6 overflow-hidden animate-in fade-in duration-200">
-          {/* Top Header */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 text-white shadow-lg shadow-red-500/30">
-                <Video size={22} />
+        <div
+          className="fixed inset-0 z-[999999] flex flex-col p-4 md:p-8 overflow-hidden animate-in fade-in duration-300"
+          style={{
+            backgroundColor: 'rgba(15, 23, 42, 0.94)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+          }}
+        >
+          <div className="max-w-7xl mx-auto w-full flex flex-col h-full">
+            {/* Top Header Bar */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 md:px-6 mb-6 shadow-2xl flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 rounded-xl bg-gradient-to-tr from-red-600 via-rose-600 to-pink-600 text-white shadow-lg shadow-red-500/25 border border-red-400/20">
+                  <Video size={24} className="animate-pulse" />
+                </div>
+                <div>
+                  <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-3">
+                    Live Team Camera Wall
+                    <span className="px-3 py-0.5 rounded-full text-xs bg-red-500/15 text-red-400 border border-red-500/30 font-semibold tracking-wide flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
+                      {(adminActivityData?.employees || []).filter((e: any) => e.currentState === 'WORKING' || e.currentState === 'IN_MEETING').length} Currently Working
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Real-time multi-camera split-screen monitoring wall for active working sessions
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-bold text-white flex items-center gap-2.5">
-                  🔴 Live Team Camera Grid Wall
-                  <span className="px-2.5 py-0.5 rounded-full text-xs bg-red-500/20 text-red-300 border border-red-500/30 font-semibold">
-                    {(adminActivityData?.employees || []).filter((e: any) => e.currentState === 'WORKING' || e.currentState === 'IN_MEETING').length} Currently Working
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Real-time multi-camera split-screen monitoring wall for Super Admin
-                </p>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={openMultiLiveMonitor}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/15 transition-all flex items-center gap-2 cursor-pointer shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <RefreshCw size={14} /> Refresh Feeds
+                </button>
+                <button
+                  onClick={closeMultiLiveMonitor}
+                  className="p-2.5 rounded-xl text-slate-400 hover:text-white bg-white/5 hover:bg-white/15 border border-white/10 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                  title="Close Live Monitor"
+                >
+                  <X size={20} />
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={openMultiLiveMonitor}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <RefreshCw size={14} /> Refresh All Feeds
-              </button>
-              <button
-                onClick={closeMultiLiveMonitor}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
-          </div>
-
-          {/* Grid Wall */}
-          <div className="flex-1 overflow-y-auto pr-1">
-            {(() => {
-              const activeEmps = (adminActivityData?.employees || []).filter(
-                (emp: any) => emp.currentState === 'WORKING' || emp.currentState === 'IN_MEETING'
-              );
-
-              if (activeEmps.length === 0) {
-                return (
-                  <div className="h-full flex flex-col items-center justify-center text-center p-12 text-slate-400 gap-3">
-                    <CameraOff size={44} className="text-slate-600" />
-                    <h3 className="text-base font-bold text-white">No Employees Currently Working</h3>
-                    <p className="text-xs max-w-sm text-slate-400">
-                      There are no active working sessions right now. As employees clock in and begin working, their live feeds will automatically populate in this grid wall.
-                    </p>
-                  </div>
+            {/* Grid Wall */}
+            <div className="flex-1 overflow-y-auto pr-1 flex flex-col justify-start">
+              {(() => {
+                const activeEmps = (adminActivityData?.employees || []).filter(
+                  (emp: any) => emp.currentState === 'WORKING' || emp.currentState === 'IN_MEETING'
                 );
-              }
 
-              return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
-                  {activeEmps.map((emp: any) => {
-                    const stream = multiStreamsMap.get(emp.user.id);
-                    const isConnecting = multiConnectingMap.get(emp.user.id) ?? !stream;
-                    const error = multiErrorMap.get(emp.user.id);
+                if (activeEmps.length === 0) {
+                  return (
+                    <div className="my-auto flex flex-col items-center justify-center text-center p-12 text-slate-400 gap-4 bg-slate-900/60 border border-slate-800 rounded-3xl shadow-2xl">
+                      <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/60 text-slate-400">
+                        <CameraOff size={48} className="text-slate-500" />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="text-lg font-bold text-white">No Employees Currently Working</h3>
+                        <p className="text-xs max-w-md text-slate-400 leading-relaxed">
+                          There are no active working sessions right now. As employees clock in and begin working, their live video streams will automatically appear here.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
 
-                    return (
-                      <div
-                        key={emp.user.id}
-                        className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl hover:border-slate-700 transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-sm">
-                              {emp.user.name?.charAt(0) || 'U'}
+                // Layout alignment based on active employee count
+                const gridClass = activeEmps.length === 1
+                  ? "grid grid-cols-1 max-w-xl mx-auto w-full gap-6 items-center"
+                  : activeEmps.length === 2
+                  ? "grid grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto w-full gap-6 items-center"
+                  : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch w-full";
+
+                return (
+                  <div className={gridClass}>
+                    {activeEmps.map((emp: any) => {
+                      const stream = multiStreamsMap.get(emp.user.id);
+                      const isConnecting = multiConnectingMap.get(emp.user.id) ?? !stream;
+                      const error = multiErrorMap.get(emp.user.id);
+
+                      return (
+                        <div
+                          key={emp.user.id}
+                          className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3.5 shadow-2xl hover:border-slate-700 transition-all duration-300"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-md shrink-0">
+                                {emp.user.name?.charAt(0)?.toUpperCase() || 'U'}
+                              </div>
+                              <div className="overflow-hidden">
+                                <div className="text-sm font-bold text-white truncate flex items-center gap-1.5">
+                                  {emp.user.name}
+                                </div>
+                                <div className="text-[11px] text-slate-400 truncate">{emp.user.email}</div>
+                              </div>
                             </div>
-                            <div className="overflow-hidden">
-                              <div className="text-xs font-bold text-white truncate">{emp.user.name}</div>
-                              <div className="text-[10px] text-slate-400 truncate">{emp.user.email}</div>
+                            <div className="shrink-0">
+                              {getStateBadge(emp.currentState)}
                             </div>
                           </div>
-                          {getStateBadge(emp.currentState)}
-                        </div>
 
-                        <MediaVideoTile
-                          stream={stream}
-                          isConnecting={isConnecting}
-                          error={error}
-                          onReconnect={() => connectSingleMultiEmployeeStream(emp.user.id)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+                          <div className="w-full">
+                            <MediaVideoTile
+                              stream={stream}
+                              isConnecting={isConnecting}
+                              error={error}
+                              onReconnect={() => connectSingleMultiEmployeeStream(emp.user.id)}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>,
         document.body
