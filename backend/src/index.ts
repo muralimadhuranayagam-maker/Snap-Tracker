@@ -40,6 +40,9 @@ import { setupWebSocket } from './services/websocket';
 import { prisma } from './lib/prisma';
 
 const app = express();
+// Enable trust proxy for reverse proxies (Render, Railway, Nginx, AWS, Heroku, etc.)
+app.set('trust proxy', 1);
+
 const server = http.createServer(app);
 
 // WebSocket setup for real-time updates
