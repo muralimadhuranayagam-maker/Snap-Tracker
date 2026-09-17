@@ -27,7 +27,8 @@ import {
   X,
   History,
   Handshake,
-  RefreshCw
+  RefreshCw,
+  Monitor,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -108,6 +109,15 @@ export function AttendancePage() {
   const adminLiveVideoRef = useRef<HTMLVideoElement | null>(null);
   const adminPendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const liveStreamTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Super Admin Live WebRTC Desktop Screen Stream state (Single)
+  const [isWatchingLiveScreen, setIsWatchingLiveScreen] = useState(false);
+  const [liveScreenConnecting, setLiveScreenConnecting] = useState(false);
+  const [liveScreenError, setLiveScreenError] = useState<string | null>(null);
+  const adminScreenPeerConnRef = useRef<RTCPeerConnection | null>(null);
+  const adminLiveScreenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const adminPendingScreenCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const liveScreenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Super Admin Live WebRTC Camera Grid state (Multi-Stream)
   const [showMultiLiveMonitor, setShowMultiLiveMonitor] = useState(false);
@@ -771,6 +781,154 @@ export function AttendancePage() {
     setIsWatchingLiveStream(false);
     setLiveStreamConnecting(false);
     setLiveStreamError(null);
+  };
+
+  // Listen for WebRTC Screen signals from employee
+  useEffect(() => {
+    if (!isWatchingLiveScreen || !selectedAdminEmployeeId) return;
+
+    const unsubscribe = subscribe(async (event) => {
+      const senderId = event.payload?.senderId;
+      if (!senderId || senderId !== selectedAdminEmployeeId) return;
+
+      const pc = adminScreenPeerConnRef.current;
+      if (!pc) return;
+
+      if (event.type === 'WEBRTC_SCREEN_OFFER') {
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(event.payload.offer));
+          while (adminPendingScreenCandidatesRef.current.length > 0) {
+            const cand = adminPendingScreenCandidatesRef.current.shift();
+            if (cand) {
+              await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            }
+          }
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          sendMessage({
+            type: 'WEBRTC_SCREEN_ANSWER',
+            targetUserId: senderId,
+            payload: { answer },
+          });
+        } catch (err) {
+          console.error('[Admin Screen WebRTC] Failed to process offer:', err);
+        }
+      } else if (event.type === 'WEBRTC_SCREEN_ICE_CANDIDATE') {
+        const candidate = event.payload?.candidate;
+        if (candidate) {
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+          } else {
+            adminPendingScreenCandidatesRef.current.push(candidate);
+          }
+        }
+      } else if (event.type === 'WEBRTC_SCREEN_ERROR') {
+        setLiveScreenConnecting(false);
+        setLiveScreenError(event.payload?.error || 'Employee declined screen share or screen is unavailable.');
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [isWatchingLiveScreen, selectedAdminEmployeeId, sendMessage, subscribe]);
+
+  const startWatchingLiveScreen = () => {
+    if (!selectedAdminEmployeeId) return;
+    if (isWatchingLiveStream) {
+      stopWatchingLiveStream();
+    }
+    setIsWatchingLiveScreen(true);
+    setLiveScreenConnecting(true);
+    setLiveScreenError(null);
+
+    const rtcConfig: RTCConfiguration = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+      ],
+    };
+
+    const pc = new RTCPeerConnection(rtcConfig);
+    adminScreenPeerConnRef.current = pc;
+    adminPendingScreenCandidatesRef.current = [];
+
+    pc.ontrack = (event) => {
+      setLiveScreenConnecting(false);
+      setLiveScreenError(null);
+      if (liveScreenTimeoutRef.current) {
+        clearTimeout(liveScreenTimeoutRef.current);
+        liveScreenTimeoutRef.current = null;
+      }
+      if (adminLiveScreenVideoRef.current) {
+        const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
+        adminLiveScreenVideoRef.current.srcObject = stream;
+        adminLiveScreenVideoRef.current.play().catch(() => {});
+      }
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && selectedAdminEmployeeId) {
+        sendMessage({
+          type: 'WEBRTC_SCREEN_ICE_CANDIDATE',
+          targetUserId: selectedAdminEmployeeId,
+          payload: { candidate: event.candidate },
+        });
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        setLiveScreenConnecting(false);
+        setLiveScreenError(null);
+        if (liveScreenTimeoutRef.current) {
+          clearTimeout(liveScreenTimeoutRef.current);
+          liveScreenTimeoutRef.current = null;
+        }
+      } else if (pc.iceConnectionState === 'failed') {
+        setLiveScreenConnecting(false);
+        setLiveScreenError('Connection to employee live screen failed or dropped.');
+      }
+    };
+
+    sendMessage({
+      type: 'WEBRTC_REQUEST_SCREEN_STREAM',
+      targetUserId: selectedAdminEmployeeId,
+      payload: { adminName: currentUser?.name || 'Super Admin' },
+    });
+
+    if (liveScreenTimeoutRef.current) clearTimeout(liveScreenTimeoutRef.current);
+    liveScreenTimeoutRef.current = setTimeout(() => {
+      if (adminScreenPeerConnRef.current && adminScreenPeerConnRef.current.iceConnectionState !== 'connected' && adminScreenPeerConnRef.current.iceConnectionState !== 'completed') {
+        setLiveScreenConnecting(false);
+        setLiveScreenError('Unable to connect. The employee may have declined screen share or is currently offline.');
+      }
+    }, 15000);
+  };
+
+  const stopWatchingLiveScreen = () => {
+    if (liveScreenTimeoutRef.current) {
+      clearTimeout(liveScreenTimeoutRef.current);
+      liveScreenTimeoutRef.current = null;
+    }
+    if (selectedAdminEmployeeId) {
+      sendMessage({
+        type: 'WEBRTC_STOP_SCREEN_STREAM',
+        targetUserId: selectedAdminEmployeeId,
+        payload: {},
+      });
+    }
+    if (adminScreenPeerConnRef.current) {
+      try { adminScreenPeerConnRef.current.close(); } catch {}
+      adminScreenPeerConnRef.current = null;
+    }
+    adminPendingScreenCandidatesRef.current = [];
+    setIsWatchingLiveScreen(false);
+    setLiveScreenConnecting(false);
+    setLiveScreenError(null);
   };
 
   // Connect single stream for Multi Live Monitor grid tile
@@ -2024,12 +2182,33 @@ export function AttendancePage() {
                     className="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white flex items-center gap-2 shadow-md shadow-rose-500/25 border border-rose-400/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
                   >
                     <Square size={14} className="text-rose-100" />
-                    <span>Stop Live Stream</span>
+                    <span>Stop Camera</span>
                   </button>
                 )}
+
+                {!isWatchingLiveScreen ? (
+                  <button
+                    onClick={startWatchingLiveScreen}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-cyan-600 via-teal-500 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-white flex items-center gap-2 shadow-md shadow-cyan-500/25 border border-cyan-400/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                    <Monitor size={15} className="text-cyan-100" />
+                    <span>View Live Screen</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopWatchingLiveScreen}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white flex items-center gap-2 shadow-md shadow-rose-500/25 border border-rose-400/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
+                  >
+                    <Square size={14} className="text-rose-100" />
+                    <span>Stop Screen</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => {
                     stopWatchingLiveStream();
+                    stopWatchingLiveScreen();
                     setSelectedAdminEmployeeId(null);
                   }}
                   className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
@@ -2039,7 +2218,7 @@ export function AttendancePage() {
               </div>
             </div>
 
-            {/* Live Video Player Stream Box */}
+            {/* Live Camera Video Player Stream Box */}
             {isWatchingLiveStream && (
               <div className="p-4 rounded-xl bg-black border border-indigo-500/30 space-y-3 animate-in fade-in duration-200">
                 <div className="flex items-center justify-between text-xs">
@@ -2048,7 +2227,7 @@ export function AttendancePage() {
                     {liveStreamConnecting
                       ? 'Connecting to employee live camera...'
                       : liveStreamError
-                      ? '⚠️ Live Feed Unavailable'
+                      ? '⚠️ Live Camera Feed Unavailable'
                       : '🔴 Real-Time WebRTC Live Camera Feed'}
                   </span>
                   <span className="text-[11px] text-muted-foreground">Visible notification active on employee screen</span>
@@ -2074,6 +2253,50 @@ export function AttendancePage() {
                       <button
                         onClick={startWatchingLiveStream}
                         className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md"
+                      >
+                        Retry Connection
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Live Desktop Screen Stream Box */}
+            {isWatchingLiveScreen && (
+              <div className="p-4 rounded-xl bg-black border border-cyan-500/30 space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-cyan-400 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-ping" />
+                    {liveScreenConnecting
+                      ? 'Connecting to employee live desktop screen...'
+                      : liveScreenError
+                      ? '⚠️ Live Screen Stream Unavailable'
+                      : '🖥️ Real-Time WebRTC Live Desktop Screen Monitor'}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">High-definition live display stream (30-60 fps)</span>
+                </div>
+                <div className="relative aspect-video rounded-lg overflow-hidden bg-muted/40 flex items-center justify-center max-h-96">
+                  <video
+                    ref={adminLiveScreenVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-contain"
+                  />
+                  {liveScreenConnecting && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 gap-2 p-4 text-center">
+                      <div className="w-7 h-7 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs text-cyan-300 font-semibold">Establishing Screen WebRTC Stream...</span>
+                    </div>
+                  )}
+                  {liveScreenError && !liveScreenConnecting && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 gap-3 p-4 text-center">
+                      <AlertTriangle className="w-8 h-8 text-amber-400 animate-bounce" />
+                      <p className="text-xs text-amber-200 font-medium max-w-sm">{liveScreenError}</p>
+                      <button
+                        onClick={startWatchingLiveScreen}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition-all shadow-md"
                       >
                         Retry Connection
                       </button>

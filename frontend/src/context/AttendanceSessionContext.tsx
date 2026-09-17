@@ -388,6 +388,9 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const { sendMessage, subscribe } = useWebSocket();
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const screenPeerConnRef = useRef<RTCPeerConnection | null>(null);
+  const screenPendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const screenStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribe(async (event) => {
@@ -459,6 +462,74 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         } catch (err) {
           console.error('[Employee WebRTC] Offer creation failed:', err);
         }
+      } else if (event.type === 'WEBRTC_REQUEST_SCREEN_STREAM') {
+        const { senderId } = event.payload || {};
+
+        let screenStream = screenStreamRef.current;
+        if (!screenStream || !screenStream.active || !screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
+          try {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({
+              video: { cursor: 'always' } as any,
+              audio: false,
+            });
+            screenStreamRef.current = screenStream;
+            screenStream.getVideoTracks().forEach((track) => {
+              track.onended = () => {
+                if (screenPeerConnRef.current) {
+                  try { screenPeerConnRef.current.close(); } catch {}
+                  screenPeerConnRef.current = null;
+                }
+                screenStreamRef.current = null;
+              };
+            });
+          } catch (err) {
+            console.error('[Employee WebRTC] Failed to acquire screen display stream:', err);
+            sendMessage({
+              type: 'WEBRTC_SCREEN_ERROR',
+              targetUserId: senderId,
+              payload: { error: 'Employee declined screen share or display stream failed.' },
+            });
+            return;
+          }
+        }
+
+        if (screenPeerConnRef.current) {
+          try { screenPeerConnRef.current.close(); } catch {}
+        }
+
+        const pc = new RTCPeerConnection(rtcConfig);
+        screenPeerConnRef.current = pc;
+        screenPendingCandidatesRef.current = [];
+
+        if (screenStream && screenStream.active) {
+          screenStream.getTracks().forEach((track) => {
+            try {
+              pc.addTrack(track, screenStream!);
+            } catch {}
+          });
+        }
+
+        pc.onicecandidate = (e) => {
+          if (e.candidate) {
+            sendMessage({
+              type: 'WEBRTC_SCREEN_ICE_CANDIDATE',
+              targetUserId: senderId,
+              payload: { candidate: e.candidate },
+            });
+          }
+        };
+
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          sendMessage({
+            type: 'WEBRTC_SCREEN_OFFER',
+            targetUserId: senderId,
+            payload: { offer },
+          });
+        } catch (err) {
+          console.error('[Employee WebRTC] Screen offer creation failed:', err);
+        }
       } else if (event.type === 'WEBRTC_ANSWER' && peerConnRef.current) {
         const pc = peerConnRef.current;
         try {
@@ -472,6 +543,19 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         } catch (err) {
           console.error('[Employee WebRTC] Failed to set remote answer:', err);
         }
+      } else if (event.type === 'WEBRTC_SCREEN_ANSWER' && screenPeerConnRef.current) {
+        const pc = screenPeerConnRef.current;
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(event.payload.answer));
+          while (screenPendingCandidatesRef.current.length > 0) {
+            const cand = screenPendingCandidatesRef.current.shift();
+            if (cand) {
+              await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            }
+          }
+        } catch (err) {
+          console.error('[Employee WebRTC] Failed to set remote screen answer:', err);
+        }
       } else if (event.type === 'WEBRTC_ICE_CANDIDATE' && peerConnRef.current) {
         const pc = peerConnRef.current;
         const candidate = event.payload?.candidate;
@@ -482,12 +566,32 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
             pendingIceCandidatesRef.current.push(candidate);
           }
         }
+      } else if (event.type === 'WEBRTC_SCREEN_ICE_CANDIDATE' && screenPeerConnRef.current) {
+        const pc = screenPeerConnRef.current;
+        const candidate = event.payload?.candidate;
+        if (candidate) {
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+          } else {
+            screenPendingCandidatesRef.current.push(candidate);
+          }
+        }
       } else if (event.type === 'WEBRTC_STOP_STREAM') {
         if (peerConnRef.current) {
           peerConnRef.current.close();
           peerConnRef.current = null;
         }
         pendingIceCandidatesRef.current = [];
+      } else if (event.type === 'WEBRTC_STOP_SCREEN_STREAM') {
+        if (screenPeerConnRef.current) {
+          try { screenPeerConnRef.current.close(); } catch {}
+          screenPeerConnRef.current = null;
+        }
+        if (screenStreamRef.current) {
+          screenStreamRef.current.getTracks().forEach((t) => t.stop());
+          screenStreamRef.current = null;
+        }
+        screenPendingCandidatesRef.current = [];
       }
     });
 
