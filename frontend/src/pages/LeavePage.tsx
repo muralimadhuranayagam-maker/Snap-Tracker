@@ -4,9 +4,9 @@ import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
 import {
-  CalendarDays, Plus, CheckCircle2, XCircle, Clock, ChevronDown,
-  User, Building2, FileText, AlertCircle, Check, X, Shield,
-  TrendingUp, CalendarCheck, CalendarX, Briefcase, RefreshCw
+  CalendarDays, Plus, CheckCircle2, XCircle, Clock,
+  FileText, TrendingUp, CalendarCheck, CalendarX, RefreshCw,
+  Check, X,
 } from 'lucide-react';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
