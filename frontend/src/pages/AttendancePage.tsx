@@ -50,8 +50,11 @@ export function AttendancePage() {
   // Super Admin Live WebRTC Camera Stream state
   const [isWatchingLiveStream, setIsWatchingLiveStream] = useState(false);
   const [liveStreamConnecting, setLiveStreamConnecting] = useState(false);
+  const [liveStreamError, setLiveStreamError] = useState<string | null>(null);
   const adminPeerConnRef = useRef<RTCPeerConnection | null>(null);
   const adminLiveVideoRef = useRef<HTMLVideoElement | null>(null);
+  const adminPendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const liveStreamTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { sendMessage, lastEvent } = useWebSocket();
 
   // Shared background camera and face presence session
@@ -536,12 +539,22 @@ export function AttendancePage() {
   useEffect(() => {
     if (!lastEvent || !isWatchingLiveStream) return;
 
-    if (lastEvent.type === 'WEBRTC_OFFER' && adminPeerConnRef.current) {
+    const handleAdminWebRTC = async () => {
       const pc = adminPeerConnRef.current;
-      pc.setRemoteDescription(new RTCSessionDescription(lastEvent.payload.offer))
-        .then(() => pc.createAnswer())
-        .then((answer) => {
-          pc.setLocalDescription(answer);
+      if (!pc) return;
+
+      if (lastEvent.type === 'WEBRTC_OFFER') {
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(lastEvent.payload.offer));
+          // Process any queued candidates that arrived prior to remote description set
+          while (adminPendingIceCandidatesRef.current.length > 0) {
+            const cand = adminPendingIceCandidatesRef.current.shift();
+            if (cand) {
+              await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            }
+          }
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
           if (selectedAdminEmployeeId) {
             sendMessage({
               type: 'WEBRTC_ANSWER',
@@ -549,27 +562,54 @@ export function AttendancePage() {
               payload: { answer },
             });
           }
-        })
-        .catch(() => {});
-    } else if (lastEvent.type === 'WEBRTC_ICE_CANDIDATE' && adminPeerConnRef.current) {
-      adminPeerConnRef.current.addIceCandidate(new RTCIceCandidate(lastEvent.payload.candidate)).catch(() => {});
-    }
+        } catch (err) {
+          console.error('[Admin WebRTC] Failed to handle offer:', err);
+        }
+      } else if (lastEvent.type === 'WEBRTC_ICE_CANDIDATE') {
+        const candidate = lastEvent.payload?.candidate;
+        if (candidate) {
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+          } else {
+            adminPendingIceCandidatesRef.current.push(candidate);
+          }
+        }
+      }
+    };
+
+    handleAdminWebRTC();
   }, [lastEvent, isWatchingLiveStream, selectedAdminEmployeeId, sendMessage]);
 
   const startWatchingLiveStream = () => {
     if (!selectedAdminEmployeeId) return;
     setIsWatchingLiveStream(true);
     setLiveStreamConnecting(true);
+    setLiveStreamError(null);
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-    });
+    const rtcConfig: RTCConfiguration = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+      ],
+    };
+
+    const pc = new RTCPeerConnection(rtcConfig);
     adminPeerConnRef.current = pc;
+    adminPendingIceCandidatesRef.current = [];
 
     pc.ontrack = (event) => {
       setLiveStreamConnecting(false);
-      if (adminLiveVideoRef.current && event.streams[0]) {
-        adminLiveVideoRef.current.srcObject = event.streams[0];
+      setLiveStreamError(null);
+      if (liveStreamTimeoutRef.current) {
+        clearTimeout(liveStreamTimeoutRef.current);
+        liveStreamTimeoutRef.current = null;
+      }
+      if (adminLiveVideoRef.current) {
+        const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
+        adminLiveVideoRef.current.srcObject = stream;
         adminLiveVideoRef.current.play().catch(() => {});
       }
     };
@@ -584,14 +624,40 @@ export function AttendancePage() {
       }
     };
 
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        setLiveStreamConnecting(false);
+        setLiveStreamError(null);
+        if (liveStreamTimeoutRef.current) {
+          clearTimeout(liveStreamTimeoutRef.current);
+          liveStreamTimeoutRef.current = null;
+        }
+      } else if (pc.iceConnectionState === 'failed') {
+        setLiveStreamConnecting(false);
+        setLiveStreamError('Connection to employee live camera failed or dropped.');
+      }
+    };
+
     sendMessage({
       type: 'WEBRTC_REQUEST_STREAM',
       targetUserId: selectedAdminEmployeeId,
       payload: { adminName: currentUser?.name || 'Super Admin' },
     });
+
+    if (liveStreamTimeoutRef.current) clearTimeout(liveStreamTimeoutRef.current);
+    liveStreamTimeoutRef.current = setTimeout(() => {
+      if (adminPeerConnRef.current && adminPeerConnRef.current.iceConnectionState !== 'connected' && adminPeerConnRef.current.iceConnectionState !== 'completed') {
+        setLiveStreamConnecting(false);
+        setLiveStreamError('Unable to connect. The employee may be offline or camera is currently inactive.');
+      }
+    }, 12000);
   };
 
   const stopWatchingLiveStream = () => {
+    if (liveStreamTimeoutRef.current) {
+      clearTimeout(liveStreamTimeoutRef.current);
+      liveStreamTimeoutRef.current = null;
+    }
     if (selectedAdminEmployeeId) {
       sendMessage({
         type: 'WEBRTC_STOP_STREAM',
@@ -603,8 +669,10 @@ export function AttendancePage() {
       adminPeerConnRef.current.close();
       adminPeerConnRef.current = null;
     }
+    adminPendingIceCandidatesRef.current = [];
     setIsWatchingLiveStream(false);
     setLiveStreamConnecting(false);
+    setLiveStreamError(null);
   };
 
   const filteredAdminEmployees = useMemo(() => {
@@ -1747,7 +1815,11 @@ export function AttendancePage() {
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-indigo-400 flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-ping" />
-                    {liveStreamConnecting ? 'Connecting to employee live camera...' : '🔴 Real-Time WebRTC Live Camera Feed'}
+                    {liveStreamConnecting
+                      ? 'Connecting to employee live camera...'
+                      : liveStreamError
+                      ? '⚠️ Live Feed Unavailable'
+                      : '🔴 Real-Time WebRTC Live Camera Feed'}
                   </span>
                   <span className="text-[11px] text-muted-foreground">Visible notification active on employee screen</span>
                 </div>
@@ -1756,12 +1828,25 @@ export function AttendancePage() {
                     ref={adminLiveVideoRef}
                     autoPlay
                     playsInline
+                    muted
                     className="w-full h-full object-cover"
                   />
                   {liveStreamConnecting && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 gap-2">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 gap-2 p-4 text-center">
                       <div className="w-7 h-7 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
                       <span className="text-xs text-indigo-300 font-semibold">Establishing WebRTC Stream...</span>
+                    </div>
+                  )}
+                  {liveStreamError && !liveStreamConnecting && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 gap-3 p-4 text-center">
+                      <AlertTriangle className="w-8 h-8 text-amber-400 animate-bounce" />
+                      <p className="text-xs text-amber-200 font-medium max-w-sm">{liveStreamError}</p>
+                      <button
+                        onClick={startWatchingLiveStream}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-md"
+                      >
+                        Retry Connection
+                      </button>
                     </div>
                   )}
                 </div>

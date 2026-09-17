@@ -389,55 +389,112 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const [isBeingStreamed, setIsBeingStreamed] = useState(false);
   const [streamedByAdminName, setStreamedByAdminName] = useState('');
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
+  const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
   useEffect(() => {
     if (!lastEvent) return;
 
-    if (lastEvent.type === 'WEBRTC_REQUEST_STREAM') {
-      const { senderId, senderName } = lastEvent.payload || {};
-      setStreamedByAdminName(senderName || 'Super Admin');
-      setIsBeingStreamed(true);
-
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      });
-      peerConnRef.current = pc;
-
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => {
-          pc.addTrack(track, mediaStreamRef.current!);
-        });
-      }
-
-      pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          sendMessage({
-            type: 'WEBRTC_ICE_CANDIDATE',
-            targetUserId: senderId,
-            payload: { candidate: e.candidate },
-          });
-        }
+    const handleWebRTC = async () => {
+      const rtcConfig: RTCConfiguration = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' },
+        ],
       };
 
-      pc.createOffer().then((offer) => {
-        pc.setLocalDescription(offer);
-        sendMessage({
-          type: 'WEBRTC_OFFER',
-          targetUserId: senderId,
-          payload: { offer },
-        });
-      }).catch(() => {});
-    } else if (lastEvent.type === 'WEBRTC_ANSWER' && peerConnRef.current) {
-      peerConnRef.current.setRemoteDescription(new RTCSessionDescription(lastEvent.payload.answer)).catch(() => {});
-    } else if (lastEvent.type === 'WEBRTC_ICE_CANDIDATE' && peerConnRef.current) {
-      peerConnRef.current.addIceCandidate(new RTCIceCandidate(lastEvent.payload.candidate)).catch(() => {});
-    } else if (lastEvent.type === 'WEBRTC_STOP_STREAM') {
-      if (peerConnRef.current) {
-        peerConnRef.current.close();
-        peerConnRef.current = null;
+      if (lastEvent.type === 'WEBRTC_REQUEST_STREAM') {
+        const { senderId, senderName } = lastEvent.payload || {};
+        setStreamedByAdminName(senderName || 'Super Admin');
+        setIsBeingStreamed(true);
+
+        // Ensure employee camera stream is active
+        let stream = mediaStreamRef.current;
+        if (!stream || !stream.active || !stream.getVideoTracks().some((t) => t.readyState === 'live')) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+              audio: false,
+            });
+            mediaStreamRef.current = stream;
+            if (bgVideoRef.current) {
+              bgVideoRef.current.srcObject = stream;
+              bgVideoRef.current.play().catch(() => {});
+            }
+          } catch (err) {
+            console.error('[Employee WebRTC] Failed to acquire camera stream:', err);
+          }
+        }
+
+        const pc = new RTCPeerConnection(rtcConfig);
+        peerConnRef.current = pc;
+        pendingIceCandidatesRef.current = [];
+
+        if (stream && stream.active) {
+          stream.getTracks().forEach((track) => {
+            try {
+              pc.addTrack(track, stream!);
+            } catch {}
+          });
+        }
+
+        pc.onicecandidate = (e) => {
+          if (e.candidate) {
+            sendMessage({
+              type: 'WEBRTC_ICE_CANDIDATE',
+              targetUserId: senderId,
+              payload: { candidate: e.candidate },
+            });
+          }
+        };
+
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          sendMessage({
+            type: 'WEBRTC_OFFER',
+            targetUserId: senderId,
+            payload: { offer },
+          });
+        } catch (err) {
+          console.error('[Employee WebRTC] Offer creation failed:', err);
+        }
+      } else if (lastEvent.type === 'WEBRTC_ANSWER' && peerConnRef.current) {
+        const pc = peerConnRef.current;
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(lastEvent.payload.answer));
+          while (pendingIceCandidatesRef.current.length > 0) {
+            const cand = pendingIceCandidatesRef.current.shift();
+            if (cand) {
+              await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            }
+          }
+        } catch (err) {
+          console.error('[Employee WebRTC] Failed to set remote answer:', err);
+        }
+      } else if (lastEvent.type === 'WEBRTC_ICE_CANDIDATE' && peerConnRef.current) {
+        const pc = peerConnRef.current;
+        const candidate = lastEvent.payload?.candidate;
+        if (candidate) {
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+          } else {
+            pendingIceCandidatesRef.current.push(candidate);
+          }
+        }
+      } else if (lastEvent.type === 'WEBRTC_STOP_STREAM') {
+        if (peerConnRef.current) {
+          peerConnRef.current.close();
+          peerConnRef.current = null;
+        }
+        pendingIceCandidatesRef.current = [];
+        setIsBeingStreamed(false);
       }
-      setIsBeingStreamed(false);
-    }
+    };
+
+    handleWebRTC();
   }, [lastEvent, sendMessage]);
 
   return (
