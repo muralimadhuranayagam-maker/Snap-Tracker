@@ -234,4 +234,24 @@ router.patch('/:id/reject', async (req, res, next) => {
   }
 });
 
+// ─── DELETE /api/leaves/:id ──────────────────────────────────────────────────
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const leave = await prisma.leave.findUnique({ where: { id: req.params.id } });
+    if (!leave) throw new AppError('Leave request not found', 404);
+
+    const isSuperAdmin = req.user!.roleName === 'SUPER_ADMIN';
+    const isOwner = leave.userId === req.user!.id;
+
+    if (!isSuperAdmin && !isOwner) {
+      throw new AppError('Access denied', 403);
+    }
+
+    await prisma.leave.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Leave request deleted successfully' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

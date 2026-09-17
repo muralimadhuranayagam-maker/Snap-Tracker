@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import {
   CalendarDays, Plus, CheckCircle2, XCircle, Clock,
   FileText, TrendingUp, CalendarCheck, CalendarX, RefreshCw,
-  Check, X,
+  Check, X, Trash2,
 } from 'lucide-react';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -256,6 +256,22 @@ export function LeavePage() {
     onError: (err: any) => toast.error(err?.error || 'Failed to reject'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/leaves/${id}`),
+    onSuccess: () => {
+      toast.success('Leave record deleted');
+      refetchAdminLeaves();
+      refetchMyLeaves();
+    },
+    onError: (err: any) => toast.error(err?.error || err?.response?.data?.error || 'Failed to delete leave record'),
+  });
+
+  const handleDelete = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this leave record?')) {
+      deleteMutation.mutate(id);
+    }
+  };
+
   const handleAction = (note: string) => {
     if (!actionModal) return;
     const { action, leave } = actionModal;
@@ -443,9 +459,7 @@ export function LeavePage() {
                     <th style={{ padding: '12px 20px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase' }}>Duration</th>
                     <th style={{ padding: '12px 20px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase' }}>Reason</th>
                     <th style={{ padding: '12px 20px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase' }}>Status</th>
-                    {activeAdminTab === 'pending' && (
-                      <th style={{ padding: '12px 20px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase' }}>Actions</th>
-                    )}
+                    <th style={{ padding: '12px 20px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600, fontSize: '11px', textTransform: 'uppercase' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -474,28 +488,38 @@ export function LeavePage() {
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' } as any}>{leave.reason}</span>
                       </td>
                       <td style={{ padding: '14px 20px', textAlign: 'center' }}><StatusBadge status={leave.status} /></td>
-                      {activeAdminTab === 'pending' && (
-                        <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                            <button
-                              onClick={() => setActionModal({ action: 'approve', leave })}
-                              style={{ padding: '5px 12px', borderRadius: '8px', border: '1px solid #16a34a', background: 'rgba(22,163,74,0.1)', color: '#4ade80', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                            >
-                              <Check size={12} /> Approve
-                            </button>
-                            <button
-                              onClick={() => setActionModal({ action: 'reject', leave })}
-                              style={{ padding: '5px 12px', borderRadius: '8px', border: '1px solid #dc2626', background: 'rgba(220,38,38,0.1)', color: '#f87171', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                            >
-                              <X size={12} /> Reject
-                            </button>
-                          </div>
-                        </td>
-                      )}
+                      <td style={{ padding: '14px 20px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+                          {leave.status === 'PENDING' && (
+                            <>
+                              <button
+                                onClick={() => setActionModal({ action: 'approve', leave })}
+                                style={{ padding: '5px 12px', borderRadius: '8px', border: '1px solid #16a34a', background: 'rgba(22,163,74,0.1)', color: '#4ade80', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                <Check size={12} /> Approve
+                              </button>
+                              <button
+                                onClick={() => setActionModal({ action: 'reject', leave })}
+                                style={{ padding: '5px 12px', borderRadius: '8px', border: '1px solid #dc2626', background: 'rgba(220,38,38,0.1)', color: '#f87171', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                <X size={12} /> Reject
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={() => handleDelete(leave.id)}
+                            title="Delete leave record"
+                            disabled={deleteMutation.isPending}
+                            style={{ padding: '6px', borderRadius: '8px', border: '1px solid rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.1)', color: '#f87171', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan={activeAdminTab === 'pending' ? 6 : 5} style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)' }}>
                         {activeAdminTab === 'pending' ? '🎉 No pending leave requests!' : 'No leave requests found.'}
                       </td>
                     </tr>
