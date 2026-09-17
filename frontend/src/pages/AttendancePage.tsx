@@ -1335,86 +1335,63 @@ export function AttendancePage() {
       {/* ─────────────────────────────────────────────────────────────────── */}
       {isSuperAdmin && activeTab === 'admin_activity' && (
         <div className="space-y-6">
-          {/* Top Admin Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-            <div className="bg-card border border-border/40 p-3.5 rounded-xl shadow-sm">
-              <div className="text-[11px] text-muted-foreground font-semibold">Total Employees</div>
-              <div className="text-xl font-bold mt-0.5">{adminOverviewData?.metrics?.totalEmployees || 0}</div>
-            </div>
-
-            <div className="bg-card border border-border/40 p-3.5 rounded-xl shadow-sm">
-              <div className="text-[11px] text-muted-foreground font-semibold">Present</div>
-              <div className="text-xl font-bold text-cyan-400 mt-0.5">{adminOverviewData?.metrics?.present || 0}</div>
-            </div>
-
-            <div className="bg-card border border-border/40 p-3.5 rounded-xl shadow-sm">
-              <div className="text-[11px] text-muted-foreground font-semibold">Working</div>
-              <div className="text-xl font-bold text-emerald-400 mt-0.5">{adminOverviewData?.metrics?.working || 0}</div>
-            </div>
-
-            <div className="bg-card border border-border/40 p-3.5 rounded-xl shadow-sm">
-              <div className="text-[11px] text-muted-foreground font-semibold">In Meeting</div>
-              <div className="text-xl font-bold text-indigo-400 mt-0.5">{adminOverviewData?.metrics?.inMeeting || 0}</div>
-            </div>
-
-            <div className="bg-card border border-border/40 p-3.5 rounded-xl shadow-sm">
-              <div className="text-[11px] text-muted-foreground font-semibold">On Break</div>
-              <div className="text-xl font-bold text-blue-400 mt-0.5">{adminOverviewData?.metrics?.onBreak || 0}</div>
-            </div>
-
-            <div className="bg-card border border-border/40 p-3.5 rounded-xl shadow-sm">
-              <div className="text-[11px] text-muted-foreground font-semibold">On Lunch</div>
-              <div className="text-xl font-bold text-purple-400 mt-0.5">{adminOverviewData?.metrics?.onLunch || 0}</div>
-            </div>
-
-            <div className="bg-card border border-border/40 p-3.5 rounded-xl shadow-sm">
-              <div className="text-[11px] text-muted-foreground font-semibold">Face Missing</div>
-              <div className="text-xl font-bold text-amber-400 mt-0.5">{adminOverviewData?.metrics?.faceNotDetected || 0}</div>
-            </div>
-
-            <div className="bg-card border border-border/40 p-3.5 rounded-xl shadow-sm">
-              <div className="text-[11px] text-muted-foreground font-semibold">Completed</div>
-              <div className="text-xl font-bold text-gray-400 mt-0.5">{adminOverviewData?.metrics?.completed || 0}</div>
-            </div>
+          {/* Top Admin Summary Cards - 4 per row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+            {[
+              { label: 'Total Employees', value: adminOverviewData?.metrics?.totalEmployees || 0, color: '#e2e8f0' },
+              { label: 'Present', value: adminOverviewData?.metrics?.present || 0, color: '#22d3ee' },
+              { label: 'Working', value: adminOverviewData?.metrics?.working || 0, color: '#4ade80' },
+              { label: 'In Meeting', value: adminOverviewData?.metrics?.inMeeting || 0, color: '#818cf8' },
+              { label: 'On Break', value: adminOverviewData?.metrics?.onBreak || 0, color: '#60a5fa' },
+              { label: 'On Lunch', value: adminOverviewData?.metrics?.onLunch || 0, color: '#c084fc' },
+              { label: 'Face Missing', value: adminOverviewData?.metrics?.faceNotDetected || 0, color: '#fbbf24' },
+              { label: 'Completed', value: adminOverviewData?.metrics?.completed || 0, color: '#94a3b8' },
+            ].map(stat => (
+              <div key={stat.label} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '14px', padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{stat.label}</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: stat.color, lineHeight: 1 }}>{stat.value}</div>
+              </div>
+            ))}
           </div>
 
           {/* Filters Bar */}
-          <div className="bg-card border border-border/40 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <div className="relative flex-1 md:w-64">
-                <Search size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search employee name/email..."
-                  value={adminSearchQuery}
-                  onChange={(e) => setAdminSearchQuery(e.target.value)}
-                  className="w-full bg-muted/40 border border-border/40 rounded-xl pl-9 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-
-              <select
-                value={adminStatusFilter}
-                onChange={(e) => setAdminStatusFilter(e.target.value)}
-                className="bg-muted/40 border border-border/40 rounded-xl px-3 py-1.5 text-xs text-foreground focus:outline-none"
-              >
-                <option value="ALL">All States</option>
-                <option value="WORKING">Working</option>
-                <option value="IN_MEETING">In Meeting</option>
-                <option value="FACE_NOT_DETECTED">Face Missing</option>
-                <option value="ON_BREAK">On Break</option>
-                <option value="ON_LUNCH">On Lunch</option>
-                <option value="WORKDAY_COMPLETED">Completed</option>
-                <option value="OFF_DUTY">Off Duty / Absent</option>
-              </select>
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '16px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {/* Search — grows to fill available space */}
+            <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '180px' }}>
+              <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+              <input
+                type="text"
+                placeholder="Search employee name/email..."
+                value={adminSearchQuery}
+                onChange={(e) => setAdminSearchQuery(e.target.value)}
+                style={{ width: '100%', paddingLeft: '32px', paddingRight: '12px', paddingTop: '7px', paddingBottom: '7px', borderRadius: '10px', border: '1px solid var(--border-default)', background: 'rgba(255,255,255,0.04)', fontSize: '12px', color: 'inherit', outline: 'none' }}
+              />
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground font-medium">Date:</span>
+            {/* Status filter */}
+            <select
+              value={adminStatusFilter}
+              onChange={(e) => setAdminStatusFilter(e.target.value)}
+              style={{ padding: '7px 12px', borderRadius: '10px', border: '1px solid var(--border-default)', background: 'rgba(255,255,255,0.04)', fontSize: '12px', color: 'inherit', outline: 'none', flexShrink: 0 }}
+            >
+              <option value="ALL">All States</option>
+              <option value="WORKING">Working</option>
+              <option value="IN_MEETING">In Meeting</option>
+              <option value="FACE_NOT_DETECTED">Face Missing</option>
+              <option value="ON_BREAK">On Break</option>
+              <option value="ON_LUNCH">On Lunch</option>
+              <option value="WORKDAY_COMPLETED">Completed</option>
+              <option value="OFF_DUTY">Off Duty / Absent</option>
+            </select>
+
+            {/* Date filter — pinned right */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>Date:</span>
               <input
                 type="date"
                 value={adminDateFilter}
                 onChange={(e) => setAdminDateFilter(e.target.value)}
-                className="bg-muted/40 border border-border/40 rounded-xl px-3 py-1.5 text-xs text-foreground font-mono focus:outline-none"
+                style={{ padding: '7px 12px', borderRadius: '10px', border: '1px solid var(--border-default)', background: 'rgba(255,255,255,0.04)', fontSize: '12px', color: 'inherit', outline: 'none', fontFamily: 'monospace' }}
               />
             </div>
           </div>
