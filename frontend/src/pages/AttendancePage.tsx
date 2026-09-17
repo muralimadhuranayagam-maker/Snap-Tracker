@@ -142,6 +142,8 @@ export function AttendancePage() {
     startCamera,
     stopCamera,
     attachVisibleVideo,
+    isScreenShareActive,
+    requestInitialScreenShare,
   } = useAttendanceSession();
 
   // Privacy Consent Modal & Workday End Confirmation
@@ -1641,13 +1643,28 @@ export function AttendancePage() {
                   <Video size={18} className="text-primary" />
                   <span className="font-bold text-sm">Face Verification Feed</span>
                 </div>
-                <span
-                  className={`text-[11px] font-mono font-medium px-2 py-0.5 rounded ${
-                    isVideoActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {isVideoActive ? 'Camera Live' : 'Camera Off'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[11px] font-mono font-medium px-2 py-0.5 rounded ${
+                      isVideoActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {isVideoActive ? 'Camera Live' : 'Camera Off'}
+                  </span>
+                  {isScreenShareActive ? (
+                    <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center gap-1">
+                      <Monitor size={11} /> Desktop Stream Active
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => requestInitialScreenShare()}
+                      className="text-[11px] font-semibold px-2.5 py-0.5 rounded bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 transition-all flex items-center gap-1 cursor-pointer"
+                      title="Authorize desktop screen share once for instant Super Admin monitoring"
+                    >
+                      <Monitor size={11} /> Authorize Screen Share
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Video Player Box */}

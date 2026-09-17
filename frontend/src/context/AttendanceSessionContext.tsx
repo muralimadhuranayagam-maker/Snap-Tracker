@@ -19,6 +19,8 @@ interface AttendanceSessionContextType {
   stopCamera: () => void;
   attachVisibleVideo: (el: HTMLVideoElement | null) => void;
   mediaStream: MediaStream | null;
+  isScreenShareActive: boolean;
+  requestInitialScreenShare: () => Promise<boolean>;
 }
 
 const AttendanceSessionContext = createContext<AttendanceSessionContextType | null>(null);
@@ -34,6 +36,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const [gracePeriodConfig, setGracePeriodConfig] = useState<number>(4);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [screenShareRequest, setScreenShareRequest] = useState<{ senderId: string; adminName?: string } | null>(null);
+  const [isScreenShareActive, setIsScreenShareActive] = useState(false);
 
   // Background stream and hidden video element for continuous background tab & navigation tracking
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -395,6 +398,40 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const screenPendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const screenStreamRef = useRef<MediaStream | null>(null);
 
+  const requestInitialScreenShare = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        return false;
+      }
+      let stream = screenStreamRef.current;
+      if (stream && stream.active && stream.getVideoTracks().some((t) => t.readyState === 'live')) {
+        setIsScreenShareActive(true);
+        return true;
+      }
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' } as any,
+        audio: false,
+      });
+      screenStreamRef.current = stream;
+      setIsScreenShareActive(true);
+      stream.getVideoTracks().forEach((track) => {
+        track.onended = () => {
+          if (screenPeerConnRef.current) {
+            try { screenPeerConnRef.current.close(); } catch {}
+            screenPeerConnRef.current = null;
+          }
+          screenStreamRef.current = null;
+          setIsScreenShareActive(false);
+        };
+      });
+      return true;
+    } catch (err) {
+      console.warn('[Employee Screen Share] User skipped or declined initial screen authorization:', err);
+      setIsScreenShareActive(false);
+      return false;
+    }
+  }, []);
+
   const startScreenShareAndConnect = useCallback(async (targetSenderId: string) => {
     const rtcConfig: RTCConfiguration = {
       iceServers: [
@@ -414,6 +451,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
           audio: false,
         });
         screenStreamRef.current = screenStream;
+        setIsScreenShareActive(true);
         screenStream.getVideoTracks().forEach((track) => {
           track.onended = () => {
             if (screenPeerConnRef.current) {
@@ -421,10 +459,12 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
               screenPeerConnRef.current = null;
             }
             screenStreamRef.current = null;
+            setIsScreenShareActive(false);
           };
         });
       } catch (err) {
         console.error('[Employee WebRTC] Failed to acquire screen display stream:', err);
+        setIsScreenShareActive(false);
         sendMessage({
           type: 'WEBRTC_SCREEN_ERROR',
           targetUserId: targetSenderId,
@@ -648,6 +688,8 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         stopCamera,
         attachVisibleVideo,
         mediaStream: mediaStreamRef.current,
+        isScreenShareActive,
+        requestInitialScreenShare,
       }}
     >
       {children}
