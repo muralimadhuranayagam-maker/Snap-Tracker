@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { Monitor, X } from 'lucide-react';
 import { FacePresenceDetector } from '../services/faceDetection';
 import { globalActivityTracker } from '../services/activityTracker';
 import { useAuthStore } from '../store/authStore';
@@ -31,6 +33,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const [gracePeriodCountdown, setGracePeriodCountdown] = useState<number | null>(null);
   const [gracePeriodConfig, setGracePeriodConfig] = useState<number>(4);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [screenShareRequest, setScreenShareRequest] = useState<{ senderId: string } | null>(null);
 
   // Background stream and hidden video element for continuous background tab & navigation tracking
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -392,6 +395,84 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const screenPendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const screenStreamRef = useRef<MediaStream | null>(null);
 
+  const startScreenShareAndConnect = useCallback(async (targetSenderId: string) => {
+    const rtcConfig: RTCConfiguration = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+      ],
+    };
+
+    let screenStream = screenStreamRef.current;
+    if (!screenStream || !screenStream.active || !screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
+      try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { cursor: 'always' } as any,
+          audio: false,
+        });
+        screenStreamRef.current = screenStream;
+        screenStream.getVideoTracks().forEach((track) => {
+          track.onended = () => {
+            if (screenPeerConnRef.current) {
+              try { screenPeerConnRef.current.close(); } catch {}
+              screenPeerConnRef.current = null;
+            }
+            screenStreamRef.current = null;
+          };
+        });
+      } catch (err) {
+        console.error('[Employee WebRTC] Failed to acquire screen display stream:', err);
+        sendMessage({
+          type: 'WEBRTC_SCREEN_ERROR',
+          targetUserId: targetSenderId,
+          payload: { error: 'Employee declined screen share or display stream failed.' },
+        });
+        return;
+      }
+    }
+
+    if (screenPeerConnRef.current) {
+      try { screenPeerConnRef.current.close(); } catch {}
+    }
+
+    const pc = new RTCPeerConnection(rtcConfig);
+    screenPeerConnRef.current = pc;
+    screenPendingCandidatesRef.current = [];
+
+    if (screenStream && screenStream.active) {
+      screenStream.getTracks().forEach((track) => {
+        try {
+          pc.addTrack(track, screenStream!);
+        } catch {}
+      });
+    }
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) {
+        sendMessage({
+          type: 'WEBRTC_SCREEN_ICE_CANDIDATE',
+          targetUserId: targetSenderId,
+          payload: { candidate: e.candidate },
+        });
+      }
+    };
+
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      sendMessage({
+        type: 'WEBRTC_SCREEN_OFFER',
+        targetUserId: targetSenderId,
+        payload: { offer },
+      });
+    } catch (err) {
+      console.error('[Employee WebRTC] Screen offer creation failed:', err);
+    }
+  }, [sendMessage]);
+
   useEffect(() => {
     const unsubscribe = subscribe(async (event) => {
       const rtcConfig: RTCConfiguration = {
@@ -466,69 +547,10 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         const { senderId } = event.payload || {};
 
         let screenStream = screenStreamRef.current;
-        if (!screenStream || !screenStream.active || !screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
-          try {
-            screenStream = await navigator.mediaDevices.getDisplayMedia({
-              video: { cursor: 'always' } as any,
-              audio: false,
-            });
-            screenStreamRef.current = screenStream;
-            screenStream.getVideoTracks().forEach((track) => {
-              track.onended = () => {
-                if (screenPeerConnRef.current) {
-                  try { screenPeerConnRef.current.close(); } catch {}
-                  screenPeerConnRef.current = null;
-                }
-                screenStreamRef.current = null;
-              };
-            });
-          } catch (err) {
-            console.error('[Employee WebRTC] Failed to acquire screen display stream:', err);
-            sendMessage({
-              type: 'WEBRTC_SCREEN_ERROR',
-              targetUserId: senderId,
-              payload: { error: 'Employee declined screen share or display stream failed.' },
-            });
-            return;
-          }
-        }
-
-        if (screenPeerConnRef.current) {
-          try { screenPeerConnRef.current.close(); } catch {}
-        }
-
-        const pc = new RTCPeerConnection(rtcConfig);
-        screenPeerConnRef.current = pc;
-        screenPendingCandidatesRef.current = [];
-
-        if (screenStream && screenStream.active) {
-          screenStream.getTracks().forEach((track) => {
-            try {
-              pc.addTrack(track, screenStream!);
-            } catch {}
-          });
-        }
-
-        pc.onicecandidate = (e) => {
-          if (e.candidate) {
-            sendMessage({
-              type: 'WEBRTC_SCREEN_ICE_CANDIDATE',
-              targetUserId: senderId,
-              payload: { candidate: e.candidate },
-            });
-          }
-        };
-
-        try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          sendMessage({
-            type: 'WEBRTC_SCREEN_OFFER',
-            targetUserId: senderId,
-            payload: { offer },
-          });
-        } catch (err) {
-          console.error('[Employee WebRTC] Screen offer creation failed:', err);
+        if (screenStream && screenStream.active && screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
+          await startScreenShareAndConnect(senderId);
+        } else {
+          setScreenShareRequest({ senderId });
         }
       } else if (event.type === 'WEBRTC_ANSWER' && peerConnRef.current) {
         const pc = peerConnRef.current;
@@ -598,7 +620,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
     return () => {
       unsubscribe();
     };
-  }, [sendMessage, subscribe]);
+  }, [sendMessage, subscribe, startScreenShareAndConnect]);
 
   return (
     <AttendanceSessionContext.Provider
@@ -617,6 +639,44 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       }}
     >
       {children}
+      {screenShareRequest && createPortal(
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999999] bg-slate-900 text-white border border-cyan-500/50 rounded-2xl p-4 shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-300">
+          <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400">
+            <Monitor size={22} className="animate-pulse" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-white">Super Admin Requested Live Screen View</div>
+            <div className="text-xs text-slate-300">Please grant screen share permission to stream your desktop for work verification.</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                const senderId = screenShareRequest.senderId;
+                setScreenShareRequest(null);
+                await startScreenShareAndConnect(senderId);
+              }}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg transition cursor-pointer"
+            >
+              Share Screen
+            </button>
+            <button
+              onClick={() => {
+                const senderId = screenShareRequest.senderId;
+                setScreenShareRequest(null);
+                sendMessage({
+                  type: 'WEBRTC_SCREEN_ERROR',
+                  targetUserId: senderId,
+                  payload: { error: 'Employee declined screen share request.' },
+                });
+              }}
+              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </AttendanceSessionContext.Provider>
   );
 }
