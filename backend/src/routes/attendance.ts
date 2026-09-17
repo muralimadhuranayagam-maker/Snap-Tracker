@@ -1570,7 +1570,10 @@ router.get('/admin/activity', requireRole('SUPER_ADMIN'), async (req, res, next)
       const act = activityMap.get(user.id);
 
       const lastAct = act?.lastActivityAt ? new Date(act.lastActivityAt) : null;
-      const isOnline = lastAct && now.getTime() - lastAct.getTime() < 120 * 1000; // active within last 2 mins
+      // An employee is Online if they are currently clocked in (working/meeting/break/lunch), or had activity within last 10 minutes
+      const isShiftActive = Boolean(att && att.clockIn && !att.clockOut && att.currentState !== 'OFF_DUTY');
+      const isRecentActivity = Boolean(lastAct && (now.getTime() - lastAct.getTime() < 600 * 1000));
+      const isOnline = isShiftActive || isRecentActivity;
 
       return {
         user,

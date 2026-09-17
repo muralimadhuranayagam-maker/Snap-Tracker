@@ -576,7 +576,7 @@ export function AttendancePage() {
       return res.data;
     },
     enabled: isSuperAdmin,
-    refetchInterval: 10000,
+    refetchInterval: 2000,
   });
 
   const { data: adminActivityData } = useQuery({
@@ -586,8 +586,28 @@ export function AttendancePage() {
       return res.data;
     },
     enabled: isSuperAdmin,
-    refetchInterval: 10000,
+    refetchInterval: 2000,
   });
+
+  // Real-time instant sync for Super Admin table & statistics on any live WebSocket event
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    const unsubscribe = subscribe((event) => {
+      if (
+        event.type === 'ATTENDANCE_STATE_CHANGED' ||
+        event.type === 'ATTENDANCE_UPDATED' ||
+        event.type === 'ACTIVITY_FLUSHED' ||
+        event.type === 'FACE_STATUS_CHANGED' ||
+        event.type === 'TICK_HEARTBEAT' ||
+        event.type?.startsWith('ATTENDANCE') ||
+        event.type?.startsWith('WEBRTC')
+      ) {
+        queryClient.invalidateQueries({ queryKey: ['admin-activity'] });
+        queryClient.invalidateQueries({ queryKey: ['admin-overview'] });
+      }
+    });
+    return () => unsubscribe();
+  }, [isSuperAdmin, subscribe, queryClient]);
 
   const { data: selectedEmployeeDetails } = useQuery({
     queryKey: ['admin-employee-details', selectedAdminEmployeeId, adminDateFilter],
