@@ -2213,30 +2213,38 @@ export function AttendancePage() {
       {/* ─────────────────────────────────────────────────────────────────── */}
       {showMultiLiveMonitor && createPortal(
         <div
-          className="fixed inset-0 z-[999999] flex flex-col p-4 md:p-8 overflow-hidden animate-in fade-in duration-300"
+          className="animate-in fade-in duration-300"
           style={{
-            backgroundColor: 'rgba(15, 23, 42, 0.94)',
-            backdropFilter: 'blur(24px)',
-            WebkitBackdropFilter: 'blur(24px)',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 2147483647,
+            backgroundColor: '#070a12',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '1.5rem',
+            overflow: 'hidden',
           }}
         >
-          <div className="max-w-7xl mx-auto w-full flex flex-col h-full">
+          <div className="max-w-7xl mx-auto w-full flex flex-col h-full gap-6">
             {/* Top Header Bar */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 md:px-6 mb-6 shadow-2xl flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3.5">
-                <div className="p-3 rounded-xl bg-gradient-to-tr from-red-600 via-rose-600 to-pink-600 text-white shadow-lg shadow-red-500/25 border border-red-400/20">
+            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 md:px-6 shadow-2xl flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-gradient-to-tr from-red-600 via-rose-600 to-pink-600 text-white shadow-lg shadow-red-500/30 border border-red-400/20">
                   <Video size={24} className="animate-pulse" />
                 </div>
                 <div>
-                  <h2 className="text-lg md:text-xl font-bold text-white flex items-center gap-3">
-                    Live Team Camera Wall
-                    <span className="px-3 py-0.5 rounded-full text-xs bg-red-500/15 text-red-400 border border-red-500/30 font-semibold tracking-wide flex items-center gap-1.5">
+                  <h2 className="text-lg md:text-xl font-extrabold text-white flex items-center gap-3 tracking-wide">
+                    Live Command Center Wall
+                    <span className="px-3 py-1 rounded-full text-xs bg-red-500/20 text-red-400 border border-red-500/30 font-bold flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
-                      {(adminActivityData?.employees || []).filter((e: any) => e.currentState === 'WORKING' || e.currentState === 'IN_MEETING').length} Currently Working
+                      {(adminActivityData?.employees || []).filter((e: any) => e.currentState === 'WORKING' || e.currentState === 'IN_MEETING').length} Currently Active
                     </span>
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Real-time multi-camera split-screen monitoring wall for active working sessions
+                    Real-time multi-camera split-screen monitoring for Super Admin
                   </p>
                 </div>
               </div>
@@ -2244,13 +2252,13 @@ export function AttendancePage() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={openMultiLiveMonitor}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/15 transition-all flex items-center gap-2 cursor-pointer shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-500/20 active:scale-95"
                 >
                   <RefreshCw size={14} /> Refresh Feeds
                 </button>
                 <button
                   onClick={closeMultiLiveMonitor}
-                  className="p-2.5 rounded-xl text-slate-400 hover:text-white bg-white/5 hover:bg-white/15 border border-white/10 transition-all cursor-pointer hover:scale-105 active:scale-95"
+                  className="p-2.5 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all cursor-pointer hover:scale-105 active:scale-95"
                   title="Close Live Monitor"
                 >
                   <X size={20} />
@@ -2268,13 +2276,13 @@ export function AttendancePage() {
                 if (activeEmps.length === 0) {
                   return (
                     <div className="my-auto flex flex-col items-center justify-center text-center p-12 text-slate-400 gap-4 bg-slate-900/60 border border-slate-800 rounded-3xl shadow-2xl">
-                      <div className="p-4 rounded-2xl bg-slate-800/80 border border-slate-700/60 text-slate-400">
+                      <div className="p-5 rounded-2xl bg-slate-800/80 border border-slate-700/60 text-slate-400">
                         <CameraOff size={48} className="text-slate-500" />
                       </div>
                       <div className="space-y-1">
-                        <h3 className="text-lg font-bold text-white">No Employees Currently Working</h3>
+                        <h3 className="text-lg font-bold text-white">No Employees Currently Active</h3>
                         <p className="text-xs max-w-md text-slate-400 leading-relaxed">
-                          There are no active working sessions right now. As employees clock in and begin working, their live video streams will automatically appear here.
+                          There are no working sessions active right now. As employees clock in and start working, their live video streams will automatically appear here.
                         </p>
                       </div>
                     </div>
@@ -2298,26 +2306,31 @@ export function AttendancePage() {
                       return (
                         <div
                           key={emp.user.id}
-                          className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3.5 shadow-2xl hover:border-slate-700 transition-all duration-300"
+                          className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-4 shadow-2xl hover:border-slate-700 transition-all duration-300"
                         >
-                          <div className="flex items-center justify-between gap-2">
+                          {/* Card Header */}
+                          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 gap-2">
                             <div className="flex items-center gap-3 overflow-hidden">
-                              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-md shrink-0">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-base shadow-md shrink-0">
                                 {emp.user.name?.charAt(0)?.toUpperCase() || 'U'}
                               </div>
                               <div className="overflow-hidden">
-                                <div className="text-sm font-bold text-white truncate flex items-center gap-1.5">
+                                <div className="text-sm font-bold text-white truncate">
                                   {emp.user.name}
                                 </div>
-                                <div className="text-[11px] text-slate-400 truncate">{emp.user.email}</div>
+                                <div className="text-xs text-slate-400 truncate">{emp.user.email}</div>
                               </div>
                             </div>
                             <div className="shrink-0">
-                              {getStateBadge(emp.currentState)}
+                              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                {emp.currentState === 'IN_MEETING' ? 'In Meeting' : 'Working'}
+                              </span>
                             </div>
                           </div>
 
-                          <div className="w-full">
+                          {/* Video Tile Box */}
+                          <div className="w-full rounded-xl overflow-hidden border border-slate-800 bg-black shadow-inner">
                             <MediaVideoTile
                               stream={stream}
                               isConnecting={isConnecting}
