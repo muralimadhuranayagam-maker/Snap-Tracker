@@ -1505,8 +1505,14 @@ export function AttendancePage() {
       {/* MODAL 1: CAMERA PRIVACY CONSENT                                     */}
       {/* ─────────────────────────────────────────────────────────────────── */}
       {showConsentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+          onClick={() => setShowConsentModal(false)}
+        >
+          <div
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-3 text-primary">
               <div className="p-3 rounded-xl bg-primary/10">
                 <ScanFace size={24} />
@@ -1553,8 +1559,14 @@ export function AttendancePage() {
       {/* MODAL 2: CONFIRM END WORKDAY                                        */}
       {/* ─────────────────────────────────────────────────────────────────── */}
       {showEndConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+          onClick={() => setShowEndConfirmModal(false)}
+        >
+          <div
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center gap-3 text-rose-400">
               <div className="p-3 rounded-xl bg-rose-500/10">
                 <Square size={24} />
@@ -1592,8 +1604,14 @@ export function AttendancePage() {
       {/* MODAL 3: SUPER_ADMIN INDIVIDUAL EMPLOYEE ACTIVITY BREAKDOWN        */}
       {/* ─────────────────────────────────────────────────────────────────── */}
       {selectedAdminEmployeeId && selectedEmployeeDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-150">
-          <div className="w-full max-w-3xl rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-6 my-8">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-150"
+          onClick={() => setSelectedAdminEmployeeId(null)}
+        >
+          <div
+            className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card border border-border p-6 shadow-2xl space-y-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-border/40 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary text-base">
