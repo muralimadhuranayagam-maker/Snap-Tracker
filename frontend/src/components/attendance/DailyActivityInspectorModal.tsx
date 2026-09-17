@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { 
   Camera, 
@@ -87,36 +88,13 @@ export function DailyActivityInspectorModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 99999,
-        background: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-      }}
+      className="modal-overlay"
       onClick={onClose}
     >
       <div 
-        style={{
-          width: '100%',
-          maxWidth: '896px',
-          maxHeight: '90vh',
-          background: '#121216',
-          color: '#ffffff',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          borderRadius: '20px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
+        className="modal modal-lg flex flex-col overflow-hidden max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Header */}
@@ -490,6 +468,7 @@ export function DailyActivityInspectorModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
