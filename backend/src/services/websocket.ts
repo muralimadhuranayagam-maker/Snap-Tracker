@@ -37,14 +37,29 @@ export function setupWebSocket(wss: WebSocketServer) {
         try {
           const parsed = JSON.parse(messageRaw.toString());
           if (parsed.type?.startsWith('WEBRTC_') && parsed.targetUserId) {
-            broadcastToUser(parsed.targetUserId, {
-              type: parsed.type,
-              payload: {
-                senderId: decoded.userId,
-                senderName: decoded.name || 'User',
-                ...parsed.payload,
-              },
-            });
+            // Check if target user is currently connected to WebSocket
+            const targetConnected = isUserConnected(parsed.targetUserId);
+
+            if (!targetConnected && parsed.type === 'WEBRTC_REQUEST_SCREEN_STREAM') {
+              ws.send(
+                JSON.stringify({
+                  type: 'WEBRTC_SCREEN_ERROR',
+                  payload: {
+                    senderId: parsed.targetUserId,
+                    error: 'Employee is currently offline or not connected to real-time server.',
+                  },
+                })
+              );
+            } else {
+              broadcastToUser(parsed.targetUserId, {
+                type: parsed.type,
+                payload: {
+                  senderId: decoded.userId,
+                  senderName: decoded.name || 'User',
+                  ...parsed.payload,
+                },
+              });
+            }
           }
         } catch (err) {
           console.error('[WS] Message parse error:', err);
@@ -65,6 +80,17 @@ export function setupWebSocket(wss: WebSocketServer) {
   });
 }
 
+// Check if a specific user has an active WebSocket connection
+export function isUserConnected(userId: string): boolean {
+  let connected = false;
+  clients.forEach((client) => {
+    if (String(client.userId) === String(userId) && client.ws.readyState === WebSocket.OPEN) {
+      connected = true;
+    }
+  });
+  return connected;
+}
+
 // Broadcast to all connected clients matching a filter
 export function broadcast(event: WSEvent, filter?: (client: WSClient) => boolean) {
   if (!event.timestamp) {
@@ -80,7 +106,7 @@ export function broadcast(event: WSEvent, filter?: (client: WSClient) => boolean
 
 // Broadcast to specific user
 export function broadcastToUser(userId: string, event: WSEvent) {
-  broadcast(event, (client) => client.userId === userId);
+  broadcast(event, (client) => String(client.userId) === String(userId));
 }
 
 // Broadcast to specific department

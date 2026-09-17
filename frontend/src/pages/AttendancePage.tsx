@@ -823,6 +823,10 @@ export function AttendancePage() {
           }
         }
       } else if (event.type === 'WEBRTC_SCREEN_ERROR') {
+        if (liveScreenTimeoutRef.current) {
+          clearTimeout(liveScreenTimeoutRef.current);
+          liveScreenTimeoutRef.current = null;
+        }
         setLiveScreenConnecting(false);
         setLiveScreenError(event.payload?.error || 'Employee declined screen share or screen is unavailable.');
       }
@@ -906,7 +910,7 @@ export function AttendancePage() {
         setLiveScreenConnecting(false);
         setLiveScreenError('Unable to connect. The employee may have declined screen share or is currently offline.');
       }
-    }, 15000);
+    }, 45000);
   };
 
   const stopWatchingLiveScreen = () => {
