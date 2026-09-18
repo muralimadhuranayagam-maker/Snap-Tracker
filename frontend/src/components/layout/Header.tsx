@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Plus, Shield, Building2, Ticket, CheckSquare, ChevronDown, CheckCircle2, FolderPlus, Menu, Sun, Moon, LogOut } from 'lucide-react';
+import { Bell, Plus, Shield, Building2, Ticket, CheckSquare, ChevronDown, CheckCircle2, FolderPlus, Menu, Sun, Moon, LogOut, Monitor } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { CreateTaskModal } from '../tasks/CreateTaskModal';
 import { RaiseTicketModal } from '../tickets/RaiseTicketModal';
@@ -237,6 +237,23 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
           >
             {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
           </button>
+
+          {/* Desktop Install Quick Button */}
+          {('beforeinstallprompt' in window || (window as any).deferredInstallPrompt) && (
+            <button
+              onClick={() => {
+                const promptEvent = (window as any).deferredInstallPrompt;
+                if (promptEvent) {
+                  promptEvent.prompt();
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition shadow-sm cursor-pointer"
+              title="Install SnapServe Tracker Application on Windows Desktop"
+            >
+              <Monitor size={14} />
+              <span>Install Desktop App</span>
+            </button>
+          )}
 
           <div className="divider" style={{ width: '1px', height: '24px', margin: '0 4px' }} />
 

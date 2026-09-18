@@ -1,0 +1,22 @@
+{
+  "short_name": "SnapServe",
+  "name": "SnapServe Tracker Desktop",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/logo.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512 192x192"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "display": "standalone",
+  "orientation": "any",
+  "description": "SnapServe Internal Work Management Platform Desktop Suite"
+}

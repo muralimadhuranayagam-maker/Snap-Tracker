@@ -29,6 +29,7 @@ import { AttendancePage } from './pages/AttendancePage';
 import { LeavePage } from './pages/LeavePage';
 import { WebSocketProvider } from './context/WebSocketContext';
 import { AttendanceSessionProvider } from './context/AttendanceSessionContext';
+import { PWAInstallBanner } from './components/common/PWAInstallBanner';
 import { SetPermanentPasswordModal } from './components/auth/SetPermanentPasswordModal';
 
 function ProtectedLayout() {
@@ -101,6 +102,7 @@ export default function App() {
   return (
     <WebSocketProvider>
       <AttendanceSessionProvider>
+        <PWAInstallBanner />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedLayout />}>
