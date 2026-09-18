@@ -85,7 +85,50 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const stopCameraInternal = useCallback((broadcast: boolean = true) => {
     shouldBeActiveRef.current = false;
 
-    // 1. Force stop all tracks in mediaStreamRef
+    // 1. Close WebRTC peer connection & stop active senders
+    if (peerConnRef.current) {
+      try {
+        peerConnRef.current.getSenders().forEach((s) => {
+          if (s.track) {
+            try {
+              s.track.enabled = false;
+              s.track.stop();
+            } catch {}
+          }
+        });
+        peerConnRef.current.close();
+      } catch {}
+      peerConnRef.current = null;
+    }
+    pendingIceCandidatesRef.current = [];
+
+    if (screenPeerConnRef.current) {
+      try {
+        screenPeerConnRef.current.getSenders().forEach((s) => {
+          if (s.track) {
+            try {
+              s.track.enabled = false;
+              s.track.stop();
+            } catch {}
+          }
+        });
+        screenPeerConnRef.current.close();
+      } catch {}
+      screenPeerConnRef.current = null;
+    }
+    screenPendingCandidatesRef.current = [];
+
+    if (screenStreamRef.current) {
+      try {
+        screenStreamRef.current.getTracks().forEach((t) => {
+          t.enabled = false;
+          t.stop();
+        });
+      } catch {}
+      screenStreamRef.current = null;
+    }
+
+    // 2. Force stop all tracks in mediaStreamRef
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => {
         try {
@@ -96,7 +139,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       mediaStreamRef.current = null;
     }
 
-    // 2. Stop and clear bgVideo
+    // 3. Stop and clear bgVideo
     if (bgVideoRef.current) {
       if (bgVideoRef.current.srcObject) {
         try {
@@ -112,7 +155,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       try { bgVideoRef.current.load(); } catch {}
     }
 
-    // 3. Stop and clear visibleVideo
+    // 4. Stop and clear visibleVideo
     if (visibleVideoRef.current) {
       if (visibleVideoRef.current.srcObject) {
         try {
@@ -128,7 +171,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       try { visibleVideoRef.current.load(); } catch {}
     }
 
-    // 4. Force stop any other video element in DOM that might hold a camera stream
+    // 5. Force stop any other video element in DOM that might hold a camera stream
     try {
       document.querySelectorAll('video').forEach((v) => {
         if (v.srcObject) {
@@ -156,7 +199,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
     if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
     if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
 
-    // 5. Broadcast to any other open SnapServe tabs so they immediately shut down camera hardware as well
+    // 6. Broadcast to any other open SnapServe tabs so they immediately shut down camera hardware as well
     if (broadcast && broadcastRef.current) {
       try {
         broadcastRef.current.postMessage({ type: 'STOP_CAMERA_ALL_TABS' });
@@ -525,6 +568,16 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       if (event.type === 'WEBRTC_REQUEST_STREAM') {
         const { senderId } = event.payload || {};
 
+        // Strict Privacy Guard: Never turn on camera hardware if employee is on break, lunch, or off-duty
+        if (!shouldBeActiveRef.current) {
+          sendMessage({
+            type: 'WEBRTC_CAMERA_OFF',
+            targetUserId: senderId,
+            payload: { reason: 'Employee is currently on break or off-duty. Camera hardware is turned off.' },
+          });
+          return;
+        }
+
         // Ensure employee camera stream is active
         let stream = mediaStreamRef.current;
         if (!stream || !stream.active || !stream.getVideoTracks().some((t) => t.readyState === 'live')) {
@@ -579,6 +632,13 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
           });
         } catch (err) {
           console.error('[Employee WebRTC] Offer creation failed:', err);
+        }
+      } else if (
+        ['ATTENDANCE_BREAK_STARTED', 'ATTENDANCE_LUNCH_STARTED', 'ATTENDANCE_CLOCKED_OUT', 'ATTENDANCE_LOGOFF'].includes(event.type)
+      ) {
+        const payloadUserId = event.payload?.record?.userId || event.payload?.userId;
+        if (payloadUserId && String(payloadUserId) === String(currentUser?.id)) {
+          stopCameraInternal(true);
         }
       } else if (event.type === 'WEBRTC_REQUEST_SCREEN_STREAM') {
         const { senderId } = event.payload || {};

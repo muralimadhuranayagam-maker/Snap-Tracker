@@ -644,7 +644,49 @@ export function AttendancePage() {
     if (!isWatchingLiveStream && !showMultiLiveMonitor) return;
 
     const unsubscribe = subscribe(async (event) => {
-      const senderId = event.payload?.senderId;
+      const senderId = event.payload?.senderId || event.payload?.record?.userId || event.payload?.userId;
+
+      if (event.type === 'WEBRTC_CAMERA_OFF') {
+        if (senderId && isWatchingLiveStream && selectedAdminEmployeeId === senderId) {
+          setLiveStreamConnecting(false);
+          setLiveStreamError(event.payload?.reason || 'Employee camera is paused (On Break / Off Duty).');
+          if (adminPeerConnRef.current) {
+            try { adminPeerConnRef.current.close(); } catch {}
+            adminPeerConnRef.current = null;
+          }
+        }
+        if (senderId && multiPeersRef.current.has(senderId)) {
+          const peer = multiPeersRef.current.get(senderId);
+          if (peer) {
+            try { peer.close(); } catch {}
+            multiPeersRef.current.delete(senderId);
+          }
+          setMultiConnectingMap((prev) => new Map(prev).set(senderId, false));
+          setMultiErrorMap((prev) => new Map(prev).set(senderId, 'On Break (Camera Off)'));
+        }
+        return;
+      }
+
+      if (['ATTENDANCE_BREAK_STARTED', 'ATTENDANCE_LUNCH_STARTED', 'ATTENDANCE_CLOCKED_OUT', 'ATTENDANCE_LOGOFF'].includes(event.type)) {
+        if (senderId && isWatchingLiveStream && selectedAdminEmployeeId === senderId) {
+          setLiveStreamConnecting(false);
+          setLiveStreamError('Employee went on break / off-duty. Camera stream paused.');
+          if (adminPeerConnRef.current) {
+            try { adminPeerConnRef.current.close(); } catch {}
+            adminPeerConnRef.current = null;
+          }
+        }
+        if (senderId && multiPeersRef.current.has(senderId)) {
+          const peer = multiPeersRef.current.get(senderId);
+          if (peer) {
+            try { peer.close(); } catch {}
+            multiPeersRef.current.delete(senderId);
+          }
+          setMultiConnectingMap((prev) => new Map(prev).set(senderId, false));
+          setMultiErrorMap((prev) => new Map(prev).set(senderId, 'On Break (Camera Off)'));
+        }
+      }
+
       if (!senderId) return;
 
       const pc = (isWatchingLiveStream && selectedAdminEmployeeId === senderId)
