@@ -1,4 +1,4 @@
-const { contextBridge, desktopCapturer } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   isDesktop: true,
@@ -6,30 +6,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   version: process.versions.electron,
   getScreenStream: async () => {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always' },
-        audio: false,
-      });
-      return stream;
-    } catch (err) {
-      console.error('[Electron Preload] getScreenStream error:', err);
-      try {
-        const sources = await desktopCapturer.getSources({ types: ['screen'] });
-        if (sources.length > 0) {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-              mandatory: {
-                chromeMediaSource: 'desktop',
-                chromeMediaSourceId: sources[0].id,
-              },
+      const sources = await ipcRenderer.invoke('GET_SCREEN_SOURCES');
+      if (sources && sources.length > 0) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: sources[0].id,
+              minWidth: 1280,
+              maxWidth: 1920,
+              minHeight: 720,
+              maxHeight: 1080,
             },
-          });
-          return stream;
-        }
-      } catch (err2) {
-        console.error('[Electron Preload] desktopCapturer fallback error:', err2);
+          },
+        });
+        return stream;
       }
+    } catch (err) {
+      console.error('[Electron Preload] Native screen capture error:', err);
     }
     return null;
   },

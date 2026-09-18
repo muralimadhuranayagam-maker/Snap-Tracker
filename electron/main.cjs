@@ -52,6 +52,18 @@ function createWindow() {
     });
   }
 
+  // Handle IPC request for silent screen capture sources
+  ipcMain.removeHandler('GET_SCREEN_SOURCES');
+  ipcMain.handle('GET_SCREEN_SOURCES', async () => {
+    try {
+      const sources = await desktopCapturer.getSources({ types: ['screen'] });
+      return sources.map((s) => ({ id: s.id, name: s.name }));
+    } catch (err) {
+      console.error('[Electron Main] desktopCapturer.getSources error:', err);
+      return [];
+    }
+  });
+
   // Open external links in default system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http:') || url.startsWith('https:')) {

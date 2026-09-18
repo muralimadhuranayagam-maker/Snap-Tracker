@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Camera, AlertTriangle, CheckCircle2, RefreshCw, X, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../lib/api';
-import { useAttendanceSession } from '../../context/AttendanceSessionContext';
 
 interface AttendanceCheckInModalProps {
   isOpen: boolean;
@@ -12,7 +11,6 @@ interface AttendanceCheckInModalProps {
 
 export function AttendanceCheckInModal({ isOpen, onClose }: AttendanceCheckInModalProps) {
   const queryClient = useQueryClient();
-  const { requestInitialScreenShare } = useAttendanceSession();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -125,11 +123,6 @@ export function AttendanceCheckInModal({ isOpen, onClose }: AttendanceCheckInMod
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       stopCamera();
       onClose();
-
-      // Trigger initial screen share authorization prompt for active shift session
-      try {
-        await requestInitialScreenShare();
-      } catch {}
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.error || 'Failed to check in. Please try again.');

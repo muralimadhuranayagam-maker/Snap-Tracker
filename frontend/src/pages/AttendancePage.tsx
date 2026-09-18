@@ -271,9 +271,6 @@ export function AttendancePage() {
       toast.success('Attendance marked for today!');
       refetchToday();
       queryClient.invalidateQueries({ queryKey: ['attendance-my-history'] });
-      try {
-        await requestInitialScreenShare();
-      } catch {}
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.error || 'Failed to mark attendance');
@@ -549,9 +546,6 @@ export function AttendancePage() {
           if (ok) {
             startWorkingMutation.mutate();
           }
-          try {
-            await requestInitialScreenShare();
-          } catch {}
         },
       });
       return;
@@ -561,9 +555,6 @@ export function AttendancePage() {
       if (ok) {
         startWorkingMutation.mutate();
       }
-      try {
-        await requestInitialScreenShare();
-      } catch {}
       return;
     }
     if (currentState === 'ON_BREAK') {
@@ -1730,7 +1721,7 @@ export function AttendancePage() {
                   >
                     {isVideoActive ? 'Camera Live' : 'Camera Off'}
                   </span>
-                  {isScreenShareActive ? (
+                  {isScreenShareActive || (typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop) ? (
                     <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center gap-1">
                       <Monitor size={11} /> Desktop Stream Active
                     </span>
