@@ -2021,4 +2021,111 @@ router.post('/webrtc/signal', async (req, res, next) => {
   }
 });
 
+// ─── Auto-break on disconnect ───────────────────────────────────────────────
+// Called by WebSocket service when a user disconnects and doesn't reconnect
+// within the grace period. Transitions WORKING/FACE_NOT_DETECTED → ON_BREAK.
+export async function autoBreakOnDisconnect(userId: string): Promise<boolean> {
+  try {
+    const todayStr = getTodayDateString();
+    const now = new Date();
+
+    const record = await prisma.attendanceRecord.findUnique({
+      where: {
+        userId_date: {
+          userId,
+          date: todayStr,
+        },
+      },
+      include: {
+        intervals: { where: { status: 'ACTIVE' } },
+      },
+    });
+
+    if (!record || record.isCompleted) {
+      return false;
+    }
+
+    // Only auto-break if the user is actively working or face-missing
+    if (record.currentState !== 'WORKING' && record.currentState !== 'FACE_NOT_DETECTED') {
+      return false;
+    }
+
+    // Accumulate any pending working seconds if transitioning from WORKING
+    let finalVerified = record.verifiedWorkingSeconds;
+    if (record.currentState === 'WORKING' && record.lastFaceDetectedAt) {
+      const delta = Math.max(
+        0,
+        Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
+      );
+      finalVerified += delta;
+    }
+
+    // Accumulate any missing seconds if transitioning from FACE_NOT_DETECTED
+    let finalMissing = record.faceMissingSeconds;
+    if (record.currentState === 'FACE_NOT_DETECTED' && record.lastFaceLostAt) {
+      const delta = Math.max(
+        0,
+        Math.floor((now.getTime() - new Date(record.lastFaceLostAt).getTime()) / 1000)
+      );
+      finalMissing += delta;
+    }
+
+    // Close any active WORK interval
+    await prisma.attendanceInterval.updateMany({
+      where: {
+        attendanceRecordId: record.id,
+        status: 'ACTIVE',
+      },
+      data: {
+        status: 'CLOSED',
+        endedAt: now,
+      },
+    });
+
+    // Create BREAK interval
+    const breakInterval = await prisma.attendanceInterval.create({
+      data: {
+        attendanceRecordId: record.id,
+        type: 'BREAK',
+        status: 'ACTIVE',
+        startedAt: now,
+      },
+    });
+
+    // Update attendance record
+    const updated = await prisma.attendanceRecord.update({
+      where: { id: record.id },
+      data: {
+        currentState: 'ON_BREAK',
+        verifiedWorkingSeconds: finalVerified,
+        faceMissingSeconds: finalMissing,
+        lastFaceDetectedAt: null,
+        lastFaceLostAt: null,
+      },
+      include: { intervals: true },
+    });
+
+    await prisma.attendanceEvent.create({
+      data: {
+        userId,
+        date: todayStr,
+        type: 'BREAK_STARTED',
+        timestamp: now,
+        metadata: JSON.stringify({ reason: 'AUTO_DISCONNECT', trigger: 'Tab/app closed or connection lost' }),
+      },
+    });
+
+    broadcast({
+      type: 'ATTENDANCE_BREAK_STARTED',
+      payload: { record: updated, breakInterval, autoDisconnect: true },
+    });
+
+    console.log(`[Attendance] Auto-break triggered for user ${userId} due to disconnect`);
+    return true;
+  } catch (err) {
+    console.error(`[Attendance] autoBreakOnDisconnect error for user ${userId}:`, err);
+    return false;
+  }
+}
+
 export default router;

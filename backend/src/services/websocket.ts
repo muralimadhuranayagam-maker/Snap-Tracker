@@ -10,6 +10,10 @@ interface WSClient {
 
 const clients = new Map<string, WSClient>();
 
+// Track disconnect grace timers per userId to auto-break if they don't reconnect
+const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const DISCONNECT_GRACE_SECONDS = 30;
+
 export function setupWebSocket(wss: WebSocketServer) {
   wss.on('connection', (ws, req) => {
     const url = new URL(req.url || '', `http://${req.headers.host}`);
@@ -30,6 +34,14 @@ export function setupWebSocket(wss: WebSocketServer) {
         departmentId: decoded.departmentId,
         roleName: decoded.roleName,
       });
+
+      // Cancel any pending disconnect auto-break timer for this user (they reconnected in time)
+      const existingTimer = disconnectTimers.get(decoded.userId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        disconnectTimers.delete(decoded.userId);
+        console.log(`[WS] User ${decoded.userId} reconnected within grace period, cancelled auto-break`);
+      }
 
       ws.send(JSON.stringify({ type: 'CONNECTED', message: 'Real-time connected' }));
 
@@ -68,6 +80,27 @@ export function setupWebSocket(wss: WebSocketServer) {
 
       ws.on('close', () => {
         clients.delete(clientId);
+
+        // Check if this user has ANY other active WebSocket connections
+        // (multi-tab scenario: only trigger auto-break if ALL connections are gone)
+        const userId = decoded.userId;
+        if (!isUserConnected(userId)) {
+          // Start disconnect grace timer — if user doesn't reconnect within 30s, auto-break
+          const timer = setTimeout(async () => {
+            disconnectTimers.delete(userId);
+            // Double-check they're still disconnected
+            if (!isUserConnected(userId)) {
+              console.log(`[WS] User ${userId} disconnected for ${DISCONNECT_GRACE_SECONDS}s, triggering auto-break`);
+              try {
+                const { autoBreakOnDisconnect } = await import('../routes/attendance');
+                await autoBreakOnDisconnect(userId);
+              } catch (err) {
+                console.error(`[WS] Failed to auto-break user ${userId}:`, err);
+              }
+            }
+          }, DISCONNECT_GRACE_SECONDS * 1000);
+          disconnectTimers.set(userId, timer);
+        }
       });
 
       ws.on('error', (err) => {
@@ -188,4 +221,5 @@ export const WSEventTypes = {
   WEBRTC_SIGNAL_ICE: 'WEBRTC_SIGNAL_ICE',
   WEBRTC_PRESENCE_PONG: 'WEBRTC_PRESENCE_PONG',
 } as const;
+
 

@@ -203,8 +203,12 @@ export function AttendancePage() {
   // Real-time second accumulator (interpolates from authoritative backend baseline)
   useEffect(() => {
     const timer = setInterval(() => {
-      if (currentState === 'WORKING' && isFaceDetected) {
+      // Only count working seconds when camera is active AND face is detected
+      if (currentState === 'WORKING' && isFaceDetected && isVideoActive) {
         setLiveWorkingSec((prev) => prev + 1);
+      } else if (currentState === 'WORKING' && !isVideoActive) {
+        // Camera is off while state says WORKING — count as face missing
+        setLiveMissingSec((prev) => prev + 1);
       } else if (currentState === 'FACE_NOT_DETECTED') {
         setLiveMissingSec((prev) => prev + 1);
       } else if (currentState === 'ON_BREAK') {
@@ -222,7 +226,7 @@ export function AttendancePage() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentState, isFaceDetected, record?.clockIn, isCompleted]);
+  }, [currentState, isFaceDetected, isVideoActive, record?.clockIn, isCompleted]);
 
   // Attach live video preview to visible video element on AttendancePage
   useEffect(() => {

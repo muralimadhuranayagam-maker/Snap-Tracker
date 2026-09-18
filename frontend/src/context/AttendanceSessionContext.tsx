@@ -416,9 +416,27 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
     };
   }, [isVideoActive, isSuperAdmin]);
 
-  // Clean up ONLY on window close/beforeunload
+  // Clean up on window close/beforeunload — notify backend immediately
   useEffect(() => {
     const handleBeforeUnload = () => {
+      // Immediately notify backend that face is no longer detected
+      // fetch with keepalive:true survives page unload (unlike regular fetch/XHR)
+      // and supports Authorization headers (unlike sendBeacon)
+      try {
+        const token = localStorage.getItem('token');
+        if (token && shouldBeActiveRef.current) {
+          fetch('/api/attendance/face-status', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ isFaceDetected: false, confidence: 0 }),
+            keepalive: true,
+          }).catch(() => {});
+        }
+      } catch {}
+
       stopCamera();
       globalActivityTracker.flush();
     };
