@@ -1,34 +1,40 @@
 import { useState, useEffect } from 'react';
-import { Download, Monitor, X, Check } from 'lucide-react';
+import { Download, X, Check, ExternalLink, Laptop } from 'lucide-react';
 
 export function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showBanner, setShowBanner] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
-    // Check if running already in standalone mode (desktop window)
-    const inStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone || document.referrer.includes('android-app://');
+    // Check if running already in standalone desktop window mode
+    const inStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone ||
+      document.referrer.includes('android-app://') ||
+      !!(window as any).electronAPI?.isDesktop;
+
     setIsStandalone(inStandalone);
 
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
       (window as any).deferredInstallPrompt = e;
-      // Show banner if not already installed/dismissed in this session
+
+      // Automatically pop up modal on initial visit if not dismissed or installed
       const dismissed = sessionStorage.getItem('pwa_banner_dismissed');
       if (!dismissed && !inStandalone) {
-        setShowBanner(true);
+        setShowModal(true);
       }
     };
 
     const handleOpenBannerEvent = () => {
-      setShowBanner(true);
+      setShowModal(true);
     };
 
     const handleAppInstalled = () => {
-      setShowBanner(false);
+      setShowModal(false);
       setInstalled(true);
       setDeferredPrompt(null);
       (window as any).deferredInstallPrompt = null;
@@ -49,68 +55,217 @@ export function PWAInstallBanner() {
     const promptObj = deferredPrompt || (window as any).deferredInstallPrompt;
     if (promptObj) {
       promptObj.prompt();
-      const { outcome } = await promptObj.userChoice;
-      if (outcome === 'accepted') {
-        setShowBanner(false);
-        setInstalled(true);
+      try {
+        const { outcome } = await promptObj.userChoice;
+        if (outcome === 'accepted') {
+          setShowModal(false);
+          setInstalled(true);
+        }
+      } catch (err) {
+        console.error('PWA install prompt error:', err);
       }
       setDeferredPrompt(null);
       (window as any).deferredInstallPrompt = null;
-    } else {
-      alert('To install SnapServe Tracker as a desktop application:\n\n1. In your browser (Chrome/Edge), look at the right end of the address bar for the "Install SnapServe" icon (or click the three dots menu ⋮).\n2. Click "Install SnapServe..." or "Save and share" -> "Install page as app".');
     }
   };
 
   const handleDismiss = () => {
-    setShowBanner(false);
+    setShowModal(false);
     sessionStorage.setItem('pwa_banner_dismissed', 'true');
   };
 
-  if (isStandalone || (!showBanner && !installed)) return null;
+  if (isStandalone || (!showModal && !installed)) return null;
+
+  const activePrompt = deferredPrompt || (window as any).deferredInstallPrompt;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[999999] max-w-md bg-slate-900/95 text-white border-2 border-primary/50 rounded-2xl p-4 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-4 duration-300">
-      <div className="flex items-start gap-3.5">
-        <div className="p-3 rounded-xl bg-primary/20 text-primary shrink-0 mt-0.5">
-          <Monitor size={24} className="animate-pulse" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-              Install SnapServe App
-              <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.2 rounded font-mono">DESKTOP</span>
-            </h4>
-            <button
-              onClick={handleDismiss}
-              className="text-slate-400 hover:text-white p-1 rounded-lg transition"
-            >
-              <X size={16} />
-            </button>
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        zIndex: 99999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        boxSizing: 'border-box',
+      }}
+      onClick={handleDismiss}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '480px',
+          backgroundColor: 'var(--bg-surface, #09090b)',
+          color: 'var(--text-primary, #f4f4f5)',
+          border: '1px solid var(--border-default, #27272a)',
+          borderRadius: '16px',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+          padding: '24px',
+          position: 'relative',
+          boxSizing: 'border-box',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={handleDismiss}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-muted, #71717a)',
+            cursor: 'pointer',
+            padding: '4px',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          title="Close dialog"
+        >
+          <X size={18} />
+        </button>
+
+        {/* Modal Content */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+          <div
+            style={{
+              padding: '12px',
+              borderRadius: '12px',
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+              color: '#3b82f6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <Laptop size={28} />
           </div>
-          <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-            Install SnapServe Tracker on your Windows Desktop for 1-click launch and uninterrupted activity tracking.
-          </p>
-          <div className="flex items-center gap-2 mt-3">
-            {installed ? (
-              <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                <Check size={14} /> Installed Successfully on Desktop!
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700 }}>
+                Install SnapServe Desktop App
+              </h3>
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                  color: '#60a5fa',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  textTransform: 'uppercase',
+                }}
+              >
+                PWA Desktop
               </span>
-            ) : (
-              <>
+            </div>
+
+            <p
+              style={{
+                margin: '10px 0 16px 0',
+                fontSize: '13px',
+                lineHeight: '1.5',
+                color: 'var(--text-secondary, #a1a1aa)',
+              }}
+            >
+              Install SnapServe Tracker on your Windows laptop/PC for 1-click desktop launch, full-screen workspace, and seamless activity tracking.
+            </p>
+
+            {installed ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  color: '#22c55e',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  padding: '10px 14px',
+                  backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(34, 197, 94, 0.2)',
+                }}
+              >
+                <Check size={16} /> App Installed Successfully on Desktop!
+              </div>
+            ) : activePrompt ? (
+              <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   onClick={handleInstallClick}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                  className="btn btn-primary"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 18px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                  }}
                 >
-                  <Download size={14} />
-                  Install App
+                  <Download size={15} />
+                  Install Now
                 </button>
                 <button
                   onClick={handleDismiss}
-                  className="px-3 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                  className="btn btn-ghost"
+                  style={{
+                    padding: '10px 14px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                  }}
                 >
                   Maybe Later
                 </button>
-              </>
+              </div>
+            ) : (
+              <div
+                style={{
+                  backgroundColor: 'var(--bg-elevated, #18181b)',
+                  border: '1px solid var(--border-default, #27272a)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  fontSize: '12px',
+                  color: 'var(--text-secondary, #a1a1aa)',
+                  lineHeight: '1.5',
+                }}
+              >
+                <div style={{ fontWeight: 600, color: 'var(--text-primary, #f4f4f5)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ExternalLink size={14} className="text-blue" />
+                  How to Install in your Browser:
+                </div>
+                <ol style={{ margin: '4px 0 0 18px', padding: 0 }}>
+                  <li>Look at the right end of your browser's address bar for the <b>"Install SnapServe"</b> icon (or click Chrome <b>⋮</b> menu).</li>
+                  <li>Click <b>"Install SnapServe..."</b> (or <i>Save & Share → Install page as app</i>).</li>
+                </ol>
+                <div style={{ marginTop: '12px', textAlign: 'right' }}>
+                  <button
+                    onClick={handleDismiss}
+                    className="btn btn-primary btn-sm"
+                    style={{ padding: '6px 14px', fontSize: '12px', cursor: 'pointer' }}
+                  >
+                    Got It
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -118,3 +273,4 @@ export function PWAInstallBanner() {
     </div>
   );
 }
+
