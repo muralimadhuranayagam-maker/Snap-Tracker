@@ -36,10 +36,17 @@ function createWindow() {
     }
   });
 
+  if (session.defaultSession.setPermissionCheckHandler) {
+    session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+      const allowedPermissions = ['media', 'audioCapture', 'notifications', 'fullscreen', 'displayCapture'];
+      return allowedPermissions.includes(permission);
+    });
+  }
+
   // Handle getDisplayMedia natively inside Desktop App without browser prompt dialog
   if (session.defaultSession.setDisplayMediaRequestHandler) {
     session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-      desktopCapturer.getSources({ types: ['screen', 'window'] }).then((sources) => {
+      desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
         if (sources.length > 0) {
           callback({ video: sources[0] });
         } else {
