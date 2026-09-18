@@ -17,9 +17,6 @@ interface AttendanceSessionContextType {
   stopCamera: () => void;
   attachVisibleVideo: (el: HTMLVideoElement | null) => void;
   mediaStream: MediaStream | null;
-  isScreenShareActive: boolean;
-  requestInitialScreenShare: () => Promise<boolean>;
-  stopScreenShare: () => void;
 }
 
 const AttendanceSessionContext = createContext<AttendanceSessionContextType | null>(null);
@@ -34,7 +31,6 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const [gracePeriodCountdown, setGracePeriodCountdown] = useState<number | null>(null);
   const [gracePeriodConfig, setGracePeriodConfig] = useState<number>(4);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isScreenShareActive, setIsScreenShareActive] = useState(false);
 
   // Background stream and hidden video element for continuous background tab & navigation tracking
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -457,72 +453,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const screenPendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const screenStreamRef = useRef<MediaStream | null>(null);
 
-  const requestInitialScreenShare = useCallback(async (): Promise<boolean> => {
-    try {
-      let stream = screenStreamRef.current;
-      if (stream && stream.active && stream.getVideoTracks().some((t) => t.readyState === 'live')) {
-        setIsScreenShareActive(true);
-        return true;
-      }
-
-      // If running inside Electron Desktop App, acquire stream silently via IPC
-      if ((window as any).electronAPI?.getScreenStream) {
-        try {
-          stream = await (window as any).electronAPI.getScreenStream();
-        } catch (err) {
-          console.error('[Employee Screen Share] Electron native stream error:', err);
-        }
-      }
-
-      if (stream && stream.active) {
-        screenStreamRef.current = stream;
-        setIsScreenShareActive(true);
-        stream.getVideoTracks().forEach((track) => {
-          track.onended = () => {
-            if (screenPeerConnRef.current) {
-              try { screenPeerConnRef.current.close(); } catch {}
-              screenPeerConnRef.current = null;
-            }
-            screenStreamRef.current = null;
-            setIsScreenShareActive(false);
-          };
-        });
-        return true;
-      }
-
-      // If in Web browser mode and explicitly requested by user, prompt via browser API
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        return false;
-      }
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { cursor: 'always' } as any,
-        audio: false,
-      });
-
-      if (stream) {
-        screenStreamRef.current = stream;
-        setIsScreenShareActive(true);
-        stream.getVideoTracks().forEach((track) => {
-          track.onended = () => {
-            if (screenPeerConnRef.current) {
-              try { screenPeerConnRef.current.close(); } catch {}
-              screenPeerConnRef.current = null;
-            }
-            screenStreamRef.current = null;
-            setIsScreenShareActive(false);
-          };
-        });
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.warn('[Employee Screen Share] User skipped or declined screen authorization:', err);
-      setIsScreenShareActive(false);
-      return false;
-    }
-  }, []);
-
-  const stopScreenShare = useCallback(() => {
+  const stopScreenStreamInternal = useCallback(() => {
     if (screenPeerConnRef.current) {
       try { screenPeerConnRef.current.close(); } catch {}
       screenPeerConnRef.current = null;
@@ -537,7 +468,6 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       screenStreamRef.current = null;
     }
     screenPendingCandidatesRef.current = [];
-    setIsScreenShareActive(false);
   }, []);
 
   const startScreenShareAndConnect = useCallback(async (targetSenderId: string) => {
@@ -553,18 +483,41 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
 
     let screenStream = screenStreamRef.current;
     if (!screenStream || !screenStream.active || !screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
-      // 1. If running in Electron Desktop App, acquire screen stream silently with zero popups
-      if ((window as any).electronAPI?.getScreenStream) {
+      // Automatic silent screen capture in Desktop App
+      if (typeof window !== 'undefined' && (window as any).electronAPI?.isDesktop) {
         try {
-          screenStream = await (window as any).electronAPI.getScreenStream();
+          if ((window as any).electronAPI?.getScreenSourceId) {
+            const sourceId = await (window as any).electronAPI.getScreenSourceId();
+            if (sourceId) {
+              screenStream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: {
+                  mandatory: {
+                    chromeMediaSource: 'desktop',
+                    chromeMediaSourceId: sourceId,
+                    minWidth: 1280,
+                    maxWidth: 1920,
+                    minHeight: 720,
+                    maxHeight: 1080,
+                  },
+                } as any,
+              });
+            }
+          }
+
+          if (!screenStream || !screenStream.active) {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({
+              video: { cursor: 'always' } as any,
+              audio: false,
+            });
+          }
         } catch (err) {
-          console.error('[Employee WebRTC] Electron getScreenStream error:', err);
+          console.error('[Employee WebRTC] Desktop App screen acquisition error:', err);
         }
       }
 
       if (screenStream && screenStream.active) {
         screenStreamRef.current = screenStream;
-        setIsScreenShareActive(true);
         screenStream.getVideoTracks().forEach((track) => {
           track.onended = () => {
             if (screenPeerConnRef.current) {
@@ -572,18 +525,15 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
               screenPeerConnRef.current = null;
             }
             screenStreamRef.current = null;
-            setIsScreenShareActive(false);
           };
         });
       } else {
-        // 2. In Web / PWA browser mode, NEVER trigger navigator.mediaDevices.getDisplayMedia on Super Admin's request!
-        // Doing so pops up "Choose what to share" unexpectedly on the user's screen.
         console.warn('[Employee WebRTC] Screen stream not active. Silent streaming requires Desktop App.');
         sendMessage({
           type: 'WEBRTC_SCREEN_ERROR',
           targetUserId: targetSenderId,
           payload: {
-            error: 'Screen stream is not active. Silent live screen streaming requires the native Desktop Application, or manual authorization via "Authorize Screen Share" in web mode.',
+            error: 'Automatic live screen streaming requires the SnapServe Tracker Desktop Application. Please ensure the employee is running the desktop app.',
           },
         });
         return;
@@ -715,7 +665,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         const payloadUserId = event.payload?.record?.userId || event.payload?.userId;
         if (payloadUserId && String(payloadUserId) === String(currentUser?.id)) {
           stopCameraInternal(true);
-          stopScreenShare();
+          stopScreenStreamInternal();
         }
       } else if (event.type === 'WEBRTC_REQUEST_SCREEN_STREAM') {
         const { senderId } = event.payload || {};
@@ -811,9 +761,6 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         stopCamera,
         attachVisibleVideo,
         mediaStream: mediaStreamRef.current,
-        isScreenShareActive,
-        requestInitialScreenShare,
-        stopScreenShare,
       }}
     >
       {children}
