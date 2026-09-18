@@ -28,6 +28,31 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
   const [isEndDayLogoffModalOpen, setIsEndDayLogoffModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Detect if running inside PWA Standalone app window or Electron Desktop App
+  const [isStandalone, setIsStandalone] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+      (window.navigator as any).standalone === true ||
+      document.referrer.includes('android-app://') ||
+      !!(window as any).electronAPI?.isDesktop
+    );
+  });
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setIsStandalone(
+        e.matches ||
+        (window.navigator as any).standalone === true ||
+        !!(window as any).electronAPI?.isDesktop
+      );
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
   // White / Black Theme Toggle
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('snapserve-theme') as 'dark' | 'light') || 'dark';
@@ -238,8 +263,8 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
             {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
           </button>
 
-          {/* Desktop Install Quick Button (Shown on Web) */}
-          {!((window as any).electronAPI?.isDesktop) && (
+          {/* Desktop Install Quick Button (Only Shown when browsing on Web tab, hidden in Desktop App) */}
+          {!isStandalone && (
             <button
               onClick={() => {
                 const promptEvent = (window as any).deferredInstallPrompt;
