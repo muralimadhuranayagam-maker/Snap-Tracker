@@ -440,9 +440,14 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
 
   const requestInitialScreenShare = useCallback(async (): Promise<boolean> => {
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        return false;
-      }
+      const isDesktopApp =
+        typeof window !== 'undefined' &&
+        (!!(window as any).electronAPI?.isDesktop ||
+          window.matchMedia('(display-mode: standalone)').matches ||
+          window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+          (window.navigator as any).standalone === true ||
+          document.referrer.includes('android-app://'));
+
       let stream = screenStreamRef.current;
       if (stream && stream.active && stream.getVideoTracks().some((t) => t.readyState === 'live')) {
         setIsScreenShareActive(true);
@@ -455,12 +460,22 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         } catch {}
       }
 
-      if (!stream || !stream.active) {
-        stream = await navigator.mediaDevices.getDisplayMedia({
-          video: { cursor: 'always' } as any,
-          audio: false,
-        });
+      // STRICT DESKTOP RULE: In Desktop App mode, NEVER trigger browser getDisplayMedia picker popup!
+      if (isDesktopApp) {
+        if (stream && stream.active) {
+          screenStreamRef.current = stream;
+        }
+        setIsScreenShareActive(true);
+        return true;
       }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        return false;
+      }
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' } as any,
+        audio: false,
+      });
 
       if (stream) {
         screenStreamRef.current = stream;
@@ -496,12 +511,30 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       ],
     };
 
+    const isDesktopApp =
+      typeof window !== 'undefined' &&
+      (!!(window as any).electronAPI?.isDesktop ||
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+        (window.navigator as any).standalone === true ||
+        document.referrer.includes('android-app://'));
+
     let screenStream = screenStreamRef.current;
     if (!screenStream || !screenStream.active || !screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
       if ((window as any).electronAPI?.getScreenStream) {
         try {
           screenStream = await (window as any).electronAPI.getScreenStream();
         } catch {}
+      }
+
+      // STRICT DESKTOP RULE: In Desktop App mode, NEVER call browser getDisplayMedia picker popup!
+      if (isDesktopApp && (!screenStream || !screenStream.active)) {
+        sendMessage({
+          type: 'WEBRTC_SCREEN_ERROR',
+          targetUserId: targetSenderId,
+          payload: { error: 'Desktop App Mode: Native screen stream is active via desktop background service.' },
+        });
+        return;
       }
 
       if (!screenStream || !screenStream.active) {
@@ -516,7 +549,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
           sendMessage({
             type: 'WEBRTC_SCREEN_ERROR',
             targetUserId: targetSenderId,
-            payload: { error: 'Employee screen stream is not currently authorized or active.' },
+            payload: { error: 'Employee declined screen share or display stream failed.' },
           });
           return;
         }
