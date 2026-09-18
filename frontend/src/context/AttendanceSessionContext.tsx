@@ -686,15 +686,35 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       } else if (event.type === 'WEBRTC_REQUEST_SCREEN_STREAM') {
         const { senderId } = event.payload || {};
 
-        let screenStream = screenStreamRef.current;
-        if (screenStream && screenStream.active && screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
-          await startScreenShareAndConnect(senderId);
-        } else {
-          // If screen stream was not pre-authorized, send WEBRTC_SCREEN_ERROR silently without showing any UI popup banner
+        // Privacy Guard: Never stream screen if employee is on break/off-duty
+        if (!shouldBeActiveRef.current) {
           sendMessage({
             type: 'WEBRTC_SCREEN_ERROR',
             targetUserId: senderId,
-            payload: { error: 'Employee screen stream is not currently authorized or active.' },
+            payload: { error: 'Employee is currently on break or off-duty. Screen stream is inactive.' },
+          });
+          return;
+        }
+
+        const isDesktopApp =
+          typeof window !== 'undefined' &&
+          (!!(window as any).electronAPI?.isDesktop ||
+            window.matchMedia('(display-mode: standalone)').matches ||
+            window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+            (window.navigator as any).standalone === true ||
+            document.referrer.includes('android-app://'));
+
+        let screenStream = screenStreamRef.current;
+        const hasLiveStream = screenStream && screenStream.active && screenStream.getVideoTracks().some((t) => t.readyState === 'live');
+
+        if (hasLiveStream || isDesktopApp) {
+          await startScreenShareAndConnect(senderId);
+        } else {
+          // If in web mode and stream was not pre-authorized, send WEBRTC_SCREEN_ERROR silently without browser dialog popups
+          sendMessage({
+            type: 'WEBRTC_SCREEN_ERROR',
+            targetUserId: senderId,
+            payload: { error: 'Employee screen stream is not authorized in web browser mode.' },
           });
         }
       } else if (event.type === 'WEBRTC_ANSWER' && peerConnRef.current) {
