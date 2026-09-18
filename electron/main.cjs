@@ -80,6 +80,14 @@ function createWindow() {
     return { action: 'allow' };
   });
 
+  // Enable F12 and Ctrl+Shift+I to toggle DevTools
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
   // Load URL
   const devServerUrl = 'http://localhost:5173';
   const productionUrl = process.env.TRACKER_SERVER_URL || 'https://snap-tracker-production.up.railway.app';

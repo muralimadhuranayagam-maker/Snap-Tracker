@@ -462,10 +462,10 @@ export function AttendancePage() {
   // Ensure camera is unconditionally stopped during pause states (Break, Lunch, Meeting, Completed, Off Duty)
   useEffect(() => {
     const isPausedState = ['ON_BREAK', 'ON_LUNCH', 'IN_MEETING', 'WORKDAY_COMPLETED', 'OFF_DUTY', 'ATTENDANCE_MARKED'].includes(currentState);
-    if (isPausedState && isVideoActive) {
+    if (isPausedState) {
       stopCamera();
     }
-  }, [currentState, isVideoActive, stopCamera]);
+  }, [currentState, stopCamera]);
 
   const handleTakeBreak = () => {
     queryClient.setQueryData(['attendance-today'], (prev: any) => {

@@ -21,6 +21,26 @@ interface AttendanceSessionContextType {
 
 const AttendanceSessionContext = createContext<AttendanceSessionContextType | null>(null);
 
+// Global registry of all active media tracks ever created by getUserMedia
+const globalActiveCameraTracks = new Set<MediaStreamTrack>();
+
+// Hook navigator.mediaDevices.getUserMedia once to track all camera tracks and prevent zombie streams
+if (typeof window !== 'undefined' && navigator?.mediaDevices?.getUserMedia) {
+  const nativeGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia = async function (constraints) {
+    const stream = await nativeGetUserMedia(constraints);
+    try {
+      stream.getTracks().forEach((track) => {
+        globalActiveCameraTracks.add(track);
+        track.addEventListener('ended', () => {
+          globalActiveCameraTracks.delete(track);
+        });
+      });
+    } catch {}
+    return stream;
+  };
+}
+
 export function AttendanceSessionProvider({ children }: { children: React.ReactNode }) {
   const { user: currentUser } = useAuthStore();
   const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
@@ -37,6 +57,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const bgVideoRef = useRef<HTMLVideoElement | null>(null);
   const visibleVideoRef = useRef<HTMLVideoElement | null>(null);
   const detectorRef = useRef<FacePresenceDetector>(new FacePresenceDetector());
+  const startCameraPromiseRef = useRef<Promise<boolean> | null>(null);
 
   const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const graceTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -69,6 +90,13 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         });
         mediaStreamRef.current = null;
       }
+      globalActiveCameraTracks.forEach((t) => {
+        try {
+          t.enabled = false;
+          t.stop();
+        } catch {}
+      });
+      globalActiveCameraTracks.clear();
       if (document.body.contains(bgVideo)) {
         document.body.removeChild(bgVideo);
       }
@@ -81,8 +109,18 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
 
   const stopCameraInternal = useCallback((broadcast: boolean = true) => {
     shouldBeActiveRef.current = false;
+    startCameraPromiseRef.current = null;
 
-    // 1. Close WebRTC peer connection & stop active senders
+    // 1. Unconditionally stop all globally tracked camera tracks (kills hardware LED immediately)
+    globalActiveCameraTracks.forEach((track) => {
+      try {
+        track.enabled = false;
+        track.stop();
+      } catch {}
+    });
+    globalActiveCameraTracks.clear();
+
+    // 2. Close WebRTC peer connection & stop active senders
     if (peerConnRef.current) {
       try {
         peerConnRef.current.getSenders().forEach((s) => {
@@ -232,74 +270,103 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
 
     shouldBeActiveRef.current = true;
     setCameraError(null);
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Your browser does not support camera access.');
-      }
 
-      // If stream is already active and healthy, reuse it
-      if (mediaStreamRef.current && mediaStreamRef.current.active && mediaStreamRef.current.getVideoTracks().some(t => t.readyState === 'live')) {
-        setIsVideoActive(true);
-        return true;
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: 'user',
-        },
-        audio: false,
-      });
-
-      // Cancellation check: If stopCamera() was triggered while getUserMedia was awaiting
-      if (!shouldBeActiveRef.current) {
-        stream.getTracks().forEach((track) => {
-          try {
-            track.enabled = false;
-            track.stop();
-          } catch {}
-        });
-        return false;
-      }
-
-      mediaStreamRef.current = stream;
-
-      // Handle Windows lock screen (Win + L) or camera hardware disconnection
-      stream.getVideoTracks().forEach((track) => {
-        track.onmute = () => {
-          // Hardware muted / locked
-          setIsFaceDetected(false);
-        };
-        track.onended = () => {
-          stopCamera();
-        };
-      });
-
-      if (bgVideoRef.current) {
-        bgVideoRef.current.srcObject = stream;
-        await bgVideoRef.current.play().catch(() => {});
-      }
-
-      if (visibleVideoRef.current) {
-        visibleVideoRef.current.srcObject = stream;
-        await visibleVideoRef.current.play().catch(() => {});
-      }
-
-      setIsVideoActive(true);
-      detectorRef.current.reset();
-      return true;
-    } catch (err: any) {
-      shouldBeActiveRef.current = false;
-      const msg =
-        err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
-          ? 'Camera access is required to verify working time.'
-          : err.name === 'NotFoundError'
-          ? 'No camera found on this device.'
-          : err.message || 'Unable to access camera.';
-      setCameraError(msg);
-      return false;
+    // If startCamera is already awaiting hardware initialization, return existing in-flight promise
+    if (startCameraPromiseRef.current) {
+      return startCameraPromiseRef.current;
     }
+
+    const runStart = async (): Promise<boolean> => {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Your browser does not support camera access.');
+        }
+
+        // If stream is already active and healthy, reuse it
+        if (
+          mediaStreamRef.current &&
+          mediaStreamRef.current.active &&
+          mediaStreamRef.current.getVideoTracks().some((t) => t.readyState === 'live')
+        ) {
+          setIsVideoActive(true);
+          return true;
+        }
+
+        // Clean up any stale tracks before requesting a new stream
+        if (mediaStreamRef.current) {
+          try {
+            mediaStreamRef.current.getTracks().forEach((t) => {
+              t.enabled = false;
+              t.stop();
+            });
+          } catch {}
+          mediaStreamRef.current = null;
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: 'user',
+          },
+          audio: false,
+        });
+
+        // Cancellation check: If stopCamera() was triggered while getUserMedia was awaiting hardware
+        if (!shouldBeActiveRef.current) {
+          stream.getTracks().forEach((track) => {
+            try {
+              track.enabled = false;
+              track.stop();
+            } catch {}
+          });
+          return false;
+        }
+
+        mediaStreamRef.current = stream;
+
+        // Handle Windows lock screen (Win + L) or camera hardware disconnection
+        stream.getVideoTracks().forEach((track) => {
+          track.onmute = () => {
+            // Hardware muted / locked
+            setIsFaceDetected(false);
+          };
+          track.onended = () => {
+            stopCamera();
+          };
+        });
+
+        if (bgVideoRef.current) {
+          bgVideoRef.current.srcObject = stream;
+          await bgVideoRef.current.play().catch(() => {});
+        }
+
+        if (visibleVideoRef.current) {
+          visibleVideoRef.current.srcObject = stream;
+          await visibleVideoRef.current.play().catch(() => {});
+        }
+
+        setIsVideoActive(true);
+        detectorRef.current.reset();
+        return true;
+      } catch (err: any) {
+        shouldBeActiveRef.current = false;
+        const msg =
+          err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
+            ? 'Camera access is required to verify working time.'
+            : err.name === 'NotFoundError'
+            ? 'No camera found on this device.'
+            : err.message || 'Unable to access camera.';
+        setCameraError(msg);
+        return false;
+      } finally {
+        startCameraPromiseRef.current = null;
+      }
+    };
+
+    const promise = runStart();
+    startCameraPromiseRef.current = promise;
+    return promise;
   }, [isSuperAdmin, stopCamera]);
 
   const attachVisibleVideo = useCallback((el: HTMLVideoElement | null) => {

@@ -13,11 +13,31 @@ export function AttendanceCheckInModal({ isOpen, onClose }: AttendanceCheckInMod
   const queryClient = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isInitializingCamera, setIsInitializingCamera] = useState(false);
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      try {
+        streamRef.current.getTracks().forEach((track) => {
+          track.enabled = false;
+          track.stop();
+        });
+      } catch {}
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      try {
+        videoRef.current.srcObject = null;
+        videoRef.current.pause();
+      } catch {}
+    }
+    setStream(null);
+  };
 
   // Initialize camera when modal opens
   useEffect(() => {
@@ -52,10 +72,11 @@ export function AttendanceCheckInModal({ isOpen, onClose }: AttendanceCheckInMod
         audio: false,
       });
 
+      streamRef.current = mediaStream;
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
+        videoRef.current.play().catch(() => {});
       }
     } catch (err: any) {
       console.error('Failed to open camera:', err);
@@ -70,15 +91,6 @@ export function AttendanceCheckInModal({ isOpen, onClose }: AttendanceCheckInMod
       setCameraError(msg);
     } finally {
       setIsInitializingCamera(false);
-    }
-  };
-
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => {
-        track.stop();
-      });
-      setStream(null);
     }
   };
 
