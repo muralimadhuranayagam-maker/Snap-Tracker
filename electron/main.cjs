@@ -82,24 +82,19 @@ function createWindow() {
 
   // Load URL
   const devServerUrl = 'http://localhost:5173';
+  const productionUrl = process.env.TRACKER_SERVER_URL || 'https://snap-tracker-production.up.railway.app';
 
   if (isDev) {
-    mainWindow.loadURL(devServerUrl);
-    // Open DevTools in dev mode if desired (commented out by default)
-    // mainWindow.webContents.openDevTools();
-  } else {
-    // Check if localhost dev server or local backend is running, otherwise load static index.html
-    const checkServer = http.get(devServerUrl, () => {
+    const checkDev = http.get(devServerUrl, () => {
       mainWindow.loadURL(devServerUrl);
     });
-
-    checkServer.on('error', () => {
-      // Fallback to local static build
-      const indexPath = path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
-      mainWindow.loadFile(indexPath).catch(() => {
-        mainWindow.loadURL(devServerUrl);
-      });
+    checkDev.on('error', () => {
+      // If local dev server isn't running, connect directly to production server
+      mainWindow.loadURL(productionUrl);
     });
+  } else {
+    // In production .exe app, connect to deployed server
+    mainWindow.loadURL(productionUrl);
   }
 
   // Show gracefully when rendered
