@@ -18,9 +18,13 @@ const queryClient = new QueryClient({
 
 // Register service worker for PWA desktop installation
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+  if (document.readyState === 'complete') {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
-  });
+  } else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+  }
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
