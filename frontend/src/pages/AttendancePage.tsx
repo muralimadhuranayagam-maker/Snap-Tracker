@@ -29,6 +29,7 @@ import {
   Handshake,
   RefreshCw,
   Monitor,
+  VideoOff,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -743,6 +744,29 @@ export function AttendancePage() {
 
   const startWatchingLiveStream = () => {
     if (!selectedAdminEmployeeId) return;
+
+    const currentState = selectedEmployeeDetails?.officialAttendance?.currentState;
+    const empName = selectedEmployeeDetails?.employee?.name || 'Employee';
+
+    if (currentState === 'ON_BREAK') {
+      setIsWatchingLiveStream(true);
+      setLiveStreamConnecting(false);
+      setLiveStreamError(`☕ ${empName} is currently ON BREAK. Live camera feed is disabled during breaks for employee privacy.`);
+      return;
+    }
+    if (currentState === 'ON_LUNCH') {
+      setIsWatchingLiveStream(true);
+      setLiveStreamConnecting(false);
+      setLiveStreamError(`🍱 ${empName} is currently ON LUNCH BREAK. Live camera feed is disabled during lunch for employee privacy.`);
+      return;
+    }
+    if (currentState === 'OFF_DUTY' || currentState === 'WORKDAY_COMPLETED' || currentState === 'CHECKED_OUT') {
+      setIsWatchingLiveStream(true);
+      setLiveStreamConnecting(false);
+      setLiveStreamError(`💤 ${empName} is currently OFF DUTY / CHECKED OUT. Live camera is only accessible when the employee is actively WORKING.`);
+      return;
+    }
+
     setIsWatchingLiveStream(true);
     setLiveStreamConnecting(true);
     setLiveStreamError(null);
@@ -2240,14 +2264,33 @@ export function AttendancePage() {
 
               <div className="flex items-center gap-2.5">
                 {!isWatchingLiveStream ? (
-                  <button
-                    onClick={startWatchingLiveStream}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white flex items-center gap-2 shadow-md shadow-indigo-500/25 border border-indigo-400/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <Video size={15} className="text-indigo-100" />
-                    <span>Watch Live Camera</span>
-                  </button>
+                  selectedEmployeeDetails.officialAttendance.currentState === 'WORKING' ||
+                  selectedEmployeeDetails.officialAttendance.currentState === 'FACE_NOT_DETECTED' ||
+                  selectedEmployeeDetails.officialAttendance.currentState === 'IN_MEETING' ? (
+                    <button
+                      onClick={startWatchingLiveStream}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white flex items-center gap-2 shadow-md shadow-indigo-500/25 border border-indigo-400/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <Video size={15} className="text-indigo-100" />
+                      <span>Watch Live Camera</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={startWatchingLiveStream}
+                      className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500/20 transition-all cursor-pointer flex items-center gap-2"
+                      title="Live camera is disabled for privacy while employee is on break or off-duty"
+                    >
+                      <VideoOff size={15} />
+                      <span>
+                        {selectedEmployeeDetails.officialAttendance.currentState === 'ON_BREAK'
+                          ? 'On Break (Camera Paused)'
+                          : selectedEmployeeDetails.officialAttendance.currentState === 'ON_LUNCH'
+                          ? 'On Lunch (Camera Paused)'
+                          : 'Off Duty (Camera Off)'}
+                      </span>
+                    </button>
+                  )
                 ) : (
                   <button
                     onClick={stopWatchingLiveStream}
