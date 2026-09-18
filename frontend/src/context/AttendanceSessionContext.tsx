@@ -1,6 +1,4 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { Monitor, X } from 'lucide-react';
 import { FacePresenceDetector } from '../services/faceDetection';
 import { globalActivityTracker } from '../services/activityTracker';
 import { useAuthStore } from '../store/authStore';
@@ -35,7 +33,6 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
   const [gracePeriodCountdown, setGracePeriodCountdown] = useState<number | null>(null);
   const [gracePeriodConfig, setGracePeriodConfig] = useState<number>(4);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [screenShareRequest, setScreenShareRequest] = useState<{ senderId: string; adminName?: string } | null>(null);
   const [isScreenShareActive, setIsScreenShareActive] = useState(false);
 
   // Background stream and hidden video element for continuous background tab & navigation tracking
@@ -584,25 +581,18 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
           console.error('[Employee WebRTC] Offer creation failed:', err);
         }
       } else if (event.type === 'WEBRTC_REQUEST_SCREEN_STREAM') {
-        const { senderId, adminName, senderName } = event.payload || {};
-
-        if ('Notification' in window && Notification.permission === 'default') {
-          Notification.requestPermission().catch(() => {});
-        }
-        if ('Notification' in window && Notification.permission === 'granted') {
-          try {
-            new Notification('SnapServe Screen View Request', {
-              body: `${adminName || senderName || 'Super Admin'} is requesting live screen view. Please click Share Screen.`,
-              icon: '/favicon.ico',
-            });
-          } catch {}
-        }
+        const { senderId } = event.payload || {};
 
         let screenStream = screenStreamRef.current;
         if (screenStream && screenStream.active && screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
           await startScreenShareAndConnect(senderId);
         } else {
-          setScreenShareRequest({ senderId, adminName: adminName || senderName || 'Super Admin' });
+          // If screen stream was not pre-authorized, send WEBRTC_SCREEN_ERROR silently without showing any UI popup banner
+          sendMessage({
+            type: 'WEBRTC_SCREEN_ERROR',
+            targetUserId: senderId,
+            payload: { error: 'Employee screen stream is not currently authorized or active.' },
+          });
         }
       } else if (event.type === 'WEBRTC_ANSWER' && peerConnRef.current) {
         const pc = peerConnRef.current;
@@ -693,54 +683,6 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       }}
     >
       {children}
-      {screenShareRequest && createPortal(
-        <div 
-          style={{ zIndex: 99999999, position: 'fixed', top: '16px', left: '50%', transform: 'translateX(-50%)' }}
-          className="bg-slate-900/95 backdrop-blur-md text-white border-2 border-cyan-500/70 rounded-2xl p-4 shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-300 min-w-[340px] max-w-lg"
-        >
-          <div className="p-3 rounded-xl bg-cyan-500/20 text-cyan-400 shrink-0">
-            <Monitor size={24} className="animate-pulse text-cyan-400" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-white flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              {screenShareRequest.adminName || 'Super Admin'} Requested Live Screen View
-            </div>
-            <div className="text-xs text-slate-300 mt-0.5 leading-snug">
-              Please click Share Screen to grant desktop stream permission for work verification.
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={async () => {
-                const senderId = screenShareRequest.senderId;
-                setScreenShareRequest(null);
-                await startScreenShareAndConnect(senderId);
-              }}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1.5"
-            >
-              <Monitor size={14} />
-              Share Screen
-            </button>
-            <button
-              onClick={() => {
-                const senderId = screenShareRequest.senderId;
-                setScreenShareRequest(null);
-                sendMessage({
-                  type: 'WEBRTC_SCREEN_ERROR',
-                  targetUserId: senderId,
-                  payload: { error: 'Employee declined screen share request.' },
-                });
-              }}
-              className="p-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-              title="Decline"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
     </AttendanceSessionContext.Provider>
   );
 }
