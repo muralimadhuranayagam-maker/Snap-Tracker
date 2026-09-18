@@ -19,6 +19,7 @@ interface AttendanceSessionContextType {
   mediaStream: MediaStream | null;
   isScreenShareActive: boolean;
   requestInitialScreenShare: () => Promise<boolean>;
+  stopScreenShare: () => void;
 }
 
 const AttendanceSessionContext = createContext<AttendanceSessionContextType | null>(null);
@@ -521,6 +522,24 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
     }
   }, []);
 
+  const stopScreenShare = useCallback(() => {
+    if (screenPeerConnRef.current) {
+      try { screenPeerConnRef.current.close(); } catch {}
+      screenPeerConnRef.current = null;
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => {
+        try {
+          t.enabled = false;
+          t.stop();
+        } catch {}
+      });
+      screenStreamRef.current = null;
+    }
+    screenPendingCandidatesRef.current = [];
+    setIsScreenShareActive(false);
+  }, []);
+
   const startScreenShareAndConnect = useCallback(async (targetSenderId: string) => {
     const rtcConfig: RTCConfiguration = {
       iceServers: [
@@ -696,6 +715,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         const payloadUserId = event.payload?.record?.userId || event.payload?.userId;
         if (payloadUserId && String(payloadUserId) === String(currentUser?.id)) {
           stopCameraInternal(true);
+          stopScreenShare();
         }
       } else if (event.type === 'WEBRTC_REQUEST_SCREEN_STREAM') {
         const { senderId } = event.payload || {};
@@ -768,10 +788,6 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
           try { screenPeerConnRef.current.close(); } catch {}
           screenPeerConnRef.current = null;
         }
-        if (screenStreamRef.current) {
-          screenStreamRef.current.getTracks().forEach((t) => t.stop());
-          screenStreamRef.current = null;
-        }
         screenPendingCandidatesRef.current = [];
       }
     });
@@ -797,6 +813,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
         mediaStream: mediaStreamRef.current,
         isScreenShareActive,
         requestInitialScreenShare,
+        stopScreenShare,
       }}
     >
       {children}

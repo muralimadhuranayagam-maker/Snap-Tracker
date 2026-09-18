@@ -145,6 +145,7 @@ export function AttendancePage() {
     attachVisibleVideo,
     isScreenShareActive,
     requestInitialScreenShare,
+    stopScreenShare,
   } = useAttendanceSession();
 
   // Privacy Consent Modal & Workday End Confirmation
@@ -574,6 +575,24 @@ export function AttendancePage() {
     if (ok) {
       startWorkingMutation.mutate();
     }
+  };
+
+  const handleAuthorizeScreen = async () => {
+    try {
+      const ok = await requestInitialScreenShare();
+      if (ok) {
+        toast.success('Desktop screen sharing authorized! Super Admin can view live screen.');
+      } else {
+        toast.error('Screen sharing was cancelled or declined.');
+      }
+    } catch {
+      toast.error('Failed to authorize screen sharing.');
+    }
+  };
+
+  const handleStopScreenShare = () => {
+    stopScreenShare();
+    toast.success('Screen sharing authorization stopped.');
   };
 
   // ─── 4. HISTORY & SUPER ADMIN QUERIES ─────────────────────────────────────
@@ -1721,13 +1740,23 @@ export function AttendancePage() {
                   >
                     {isVideoActive ? 'Camera Live' : 'Camera Off'}
                   </span>
-                  {isScreenShareActive || (typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop) ? (
+                  {isScreenShareActive ? (
+                    <button
+                      onClick={handleStopScreenShare}
+                      className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-rose-500/15 hover:text-rose-400 hover:border-rose-500/30 transition-all flex items-center gap-1 cursor-pointer group"
+                      title="Click to stop sharing your desktop screen"
+                    >
+                      <Monitor size={11} />
+                      <span className="group-hover:hidden">Desktop Stream Active</span>
+                      <span className="hidden group-hover:inline">Stop Screen Share</span>
+                    </button>
+                  ) : (typeof window !== 'undefined' && !!(window as any).electronAPI?.isDesktop) ? (
                     <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center gap-1">
-                      <Monitor size={11} /> Desktop Stream Active
+                      <Monitor size={11} /> Desktop Stream Ready
                     </span>
                   ) : (
                     <button
-                      onClick={() => requestInitialScreenShare()}
+                      onClick={handleAuthorizeScreen}
                       className="text-[11px] font-semibold px-2.5 py-0.5 rounded bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 transition-all flex items-center gap-1 cursor-pointer"
                       title="Authorize desktop screen share once for instant Super Admin monitoring"
                     >
