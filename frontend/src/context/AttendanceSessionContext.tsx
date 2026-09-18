@@ -511,30 +511,12 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       ],
     };
 
-    const isDesktopApp =
-      typeof window !== 'undefined' &&
-      (!!(window as any).electronAPI?.isDesktop ||
-        window.matchMedia('(display-mode: standalone)').matches ||
-        window.matchMedia('(display-mode: window-controls-overlay)').matches ||
-        (window.navigator as any).standalone === true ||
-        document.referrer.includes('android-app://'));
-
     let screenStream = screenStreamRef.current;
     if (!screenStream || !screenStream.active || !screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
       if ((window as any).electronAPI?.getScreenStream) {
         try {
           screenStream = await (window as any).electronAPI.getScreenStream();
         } catch {}
-      }
-
-      // STRICT DESKTOP RULE: In Desktop App mode, NEVER call browser getDisplayMedia picker popup!
-      if (isDesktopApp && (!screenStream || !screenStream.active)) {
-        sendMessage({
-          type: 'WEBRTC_SCREEN_ERROR',
-          targetUserId: targetSenderId,
-          payload: { error: 'Desktop App Mode: Native screen stream is active via desktop background service.' },
-        });
-        return;
       }
 
       if (!screenStream || !screenStream.active) {
@@ -710,27 +692,7 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
           return;
         }
 
-        const isDesktopApp =
-          typeof window !== 'undefined' &&
-          (!!(window as any).electronAPI?.isDesktop ||
-            window.matchMedia('(display-mode: standalone)').matches ||
-            window.matchMedia('(display-mode: window-controls-overlay)').matches ||
-            (window.navigator as any).standalone === true ||
-            document.referrer.includes('android-app://'));
-
-        let screenStream = screenStreamRef.current;
-        const hasLiveStream = screenStream && screenStream.active && screenStream.getVideoTracks().some((t) => t.readyState === 'live');
-
-        if (hasLiveStream || isDesktopApp) {
-          await startScreenShareAndConnect(senderId);
-        } else {
-          // If in web mode and stream was not pre-authorized, send WEBRTC_SCREEN_ERROR silently without browser dialog popups
-          sendMessage({
-            type: 'WEBRTC_SCREEN_ERROR',
-            targetUserId: senderId,
-            payload: { error: 'Employee screen stream is not authorized in web browser mode.' },
-          });
-        }
+        await startScreenShareAndConnect(senderId);
       } else if (event.type === 'WEBRTC_ANSWER' && peerConnRef.current) {
         const pc = peerConnRef.current;
         try {
