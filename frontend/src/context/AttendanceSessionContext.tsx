@@ -440,6 +440,31 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
 
   const requestInitialScreenShare = useCallback(async (): Promise<boolean> => {
     try {
+      // Check if running inside Desktop Application mode (PWA Standalone window or Electron Desktop App)
+      const isDesktopApp =
+        typeof window !== 'undefined' &&
+        (!!(window as any).electronAPI?.isDesktop ||
+          window.matchMedia('(display-mode: standalone)').matches ||
+          window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+          (window.navigator as any).standalone === true ||
+          document.referrer.includes('android-app://'));
+
+      // If running as Desktop Application, do NOT prompt with browser getDisplayMedia picker popup
+      if (isDesktopApp) {
+        if ((window as any).electronAPI?.getScreenStream) {
+          try {
+            const stream = await (window as any).electronAPI.getScreenStream();
+            if (stream) {
+              screenStreamRef.current = stream;
+              setIsScreenShareActive(true);
+              return true;
+            }
+          } catch {}
+        }
+        setIsScreenShareActive(true);
+        return true;
+      }
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
         return false;
       }
@@ -483,34 +508,52 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
       ],
     };
 
+    const isDesktopApp =
+      typeof window !== 'undefined' &&
+      (!!(window as any).electronAPI?.isDesktop ||
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+        (window.navigator as any).standalone === true ||
+        document.referrer.includes('android-app://'));
+
     let screenStream = screenStreamRef.current;
     if (!screenStream || !screenStream.active || !screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
-      try {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: { cursor: 'always' } as any,
-          audio: false,
-        });
-        screenStreamRef.current = screenStream;
-        setIsScreenShareActive(true);
-        screenStream.getVideoTracks().forEach((track) => {
-          track.onended = () => {
-            if (screenPeerConnRef.current) {
-              try { screenPeerConnRef.current.close(); } catch {}
-              screenPeerConnRef.current = null;
-            }
-            screenStreamRef.current = null;
-            setIsScreenShareActive(false);
-          };
-        });
-      } catch (err) {
-        console.error('[Employee WebRTC] Failed to acquire screen display stream:', err);
-        setIsScreenShareActive(false);
-        sendMessage({
-          type: 'WEBRTC_SCREEN_ERROR',
-          targetUserId: targetSenderId,
-          payload: { error: 'Employee declined screen share or display stream failed.' },
-        });
-        return;
+      if (isDesktopApp) {
+        if ((window as any).electronAPI?.getScreenStream) {
+          try {
+            screenStream = await (window as any).electronAPI.getScreenStream();
+            screenStreamRef.current = screenStream;
+            setIsScreenShareActive(true);
+          } catch {}
+        }
+      } else {
+        try {
+          screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { cursor: 'always' } as any,
+            audio: false,
+          });
+          screenStreamRef.current = screenStream;
+          setIsScreenShareActive(true);
+          screenStream.getVideoTracks().forEach((track) => {
+            track.onended = () => {
+              if (screenPeerConnRef.current) {
+                try { screenPeerConnRef.current.close(); } catch {}
+                screenPeerConnRef.current = null;
+              }
+              screenStreamRef.current = null;
+              setIsScreenShareActive(false);
+            };
+          });
+        } catch (err) {
+          console.error('[Employee WebRTC] Failed to acquire screen display stream:', err);
+          setIsScreenShareActive(false);
+          sendMessage({
+            type: 'WEBRTC_SCREEN_ERROR',
+            targetUserId: targetSenderId,
+            payload: { error: 'Employee declined screen share or display stream failed.' },
+          });
+          return;
+        }
       }
     }
 
