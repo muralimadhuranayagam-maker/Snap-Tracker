@@ -238,14 +238,16 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
             {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
           </button>
 
-          {/* Desktop Install Quick Button */}
-          {('beforeinstallprompt' in window || (window as any).deferredInstallPrompt) && (
+          {/* Desktop Install Quick Button (Shown on Web) */}
+          {!((window as any).electronAPI?.isDesktop) && (
             <button
               onClick={() => {
                 const promptEvent = (window as any).deferredInstallPrompt;
                 if (promptEvent) {
                   promptEvent.prompt();
                 }
+                // Also notify PWAInstallBanner to open banner/modal
+                window.dispatchEvent(new CustomEvent('open-pwa-install-banner'));
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition shadow-sm cursor-pointer"
               title="Install SnapServe Tracker Application on Windows Desktop"

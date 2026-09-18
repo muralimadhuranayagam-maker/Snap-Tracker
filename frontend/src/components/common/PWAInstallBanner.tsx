@@ -15,6 +15,7 @@ export function PWAInstallBanner() {
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      (window as any).deferredInstallPrompt = e;
       // Show banner if not already installed/dismissed in this session
       const dismissed = sessionStorage.getItem('pwa_banner_dismissed');
       if (!dismissed && !inStandalone) {
@@ -22,30 +23,42 @@ export function PWAInstallBanner() {
       }
     };
 
+    const handleOpenBannerEvent = () => {
+      setShowBanner(true);
+    };
+
     const handleAppInstalled = () => {
       setShowBanner(false);
       setInstalled(true);
       setDeferredPrompt(null);
+      (window as any).deferredInstallPrompt = null;
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
+    window.addEventListener('open-pwa-install-banner', handleOpenBannerEvent);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('open-pwa-install-banner', handleOpenBannerEvent);
     };
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setShowBanner(false);
-      setInstalled(true);
+    const promptObj = deferredPrompt || (window as any).deferredInstallPrompt;
+    if (promptObj) {
+      promptObj.prompt();
+      const { outcome } = await promptObj.userChoice;
+      if (outcome === 'accepted') {
+        setShowBanner(false);
+        setInstalled(true);
+      }
+      setDeferredPrompt(null);
+      (window as any).deferredInstallPrompt = null;
+    } else {
+      alert('To install SnapServe Tracker as a desktop application:\n\n1. In your browser (Chrome/Edge), look at the right end of the address bar for the "Install SnapServe" icon (or click the three dots menu ⋮).\n2. Click "Install SnapServe..." or "Save and share" -> "Install page as app".');
     }
-    setDeferredPrompt(null);
   };
 
   const handleDismiss = () => {
