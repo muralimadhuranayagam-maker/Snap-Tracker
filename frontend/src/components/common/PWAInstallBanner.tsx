@@ -4,27 +4,27 @@ import { Download, X, Check, ExternalLink, Laptop } from 'lucide-react';
 export function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
   const [installed, setInstalled] = useState(false);
 
-  useEffect(() => {
-    // Check if running already in standalone desktop window mode
-    const inStandalone =
-      window.matchMedia('(display-mode: standalone)').matches ||
+  // Synchronous check if already in standalone app window
+  const isStandalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as any).standalone ||
       document.referrer.includes('android-app://') ||
-      !!(window as any).electronAPI?.isDesktop;
+      !!(window as any).electronAPI?.isDesktop);
 
-    setIsStandalone(inStandalone);
+  useEffect(() => {
+    if (isStandalone) return;
 
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
       (window as any).deferredInstallPrompt = e;
 
-      // Automatically pop up modal on initial visit if not dismissed or installed
+      // Automatically pop up modal on initial visit if not dismissed
       const dismissed = sessionStorage.getItem('pwa_banner_dismissed');
-      if (!dismissed && !inStandalone) {
+      if (!dismissed) {
         setShowModal(true);
       }
     };
@@ -34,10 +34,15 @@ export function PWAInstallBanner() {
     };
 
     const handleAppInstalled = () => {
-      setShowModal(false);
       setInstalled(true);
+      setShowModal(true);
       setDeferredPrompt(null);
       (window as any).deferredInstallPrompt = null;
+      // Auto-hide after 3.5 seconds
+      setTimeout(() => {
+        setShowModal(false);
+        setInstalled(false);
+      }, 3500);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -49,7 +54,7 @@ export function PWAInstallBanner() {
       window.removeEventListener('appinstalled', handleAppInstalled);
       window.removeEventListener('open-pwa-install-banner', handleOpenBannerEvent);
     };
-  }, []);
+  }, [isStandalone]);
 
   const handleInstallClick = async () => {
     const promptObj = deferredPrompt || (window as any).deferredInstallPrompt;
@@ -58,8 +63,8 @@ export function PWAInstallBanner() {
       try {
         const { outcome } = await promptObj.userChoice;
         if (outcome === 'accepted') {
-          setShowModal(false);
           setInstalled(true);
+          setShowModal(true);
         }
       } catch (err) {
         console.error('PWA install prompt error:', err);
@@ -71,10 +76,11 @@ export function PWAInstallBanner() {
 
   const handleDismiss = () => {
     setShowModal(false);
+    setInstalled(false);
     sessionStorage.setItem('pwa_banner_dismissed', 'true');
   };
 
-  if (isStandalone || (!showModal && !installed)) return null;
+  if (isStandalone || !showModal) return null;
 
   const activePrompt = deferredPrompt || (window as any).deferredInstallPrompt;
 
@@ -191,6 +197,7 @@ export function PWAInstallBanner() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'space-between',
                   gap: '8px',
                   color: '#22c55e',
                   fontWeight: 600,
@@ -201,7 +208,16 @@ export function PWAInstallBanner() {
                   border: '1px solid rgba(34, 197, 94, 0.2)',
                 }}
               >
-                <Check size={16} /> App Installed Successfully on Desktop!
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Check size={16} /> App Installed Successfully on Desktop!
+                </span>
+                <button
+                  onClick={handleDismiss}
+                  className="btn btn-ghost btn-sm"
+                  style={{ padding: '4px 8px', fontSize: '11px', cursor: 'pointer' }}
+                >
+                  Close
+                </button>
               </div>
             ) : activePrompt ? (
               <div style={{ display: 'flex', gap: '10px' }}>
