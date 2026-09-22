@@ -975,33 +975,6 @@ export function TaskDetailsPage() {
         {/* Left Column (2/3) */}
         <div className="lg:col-span-2 space-y-6">
 
-          {/* Task Deliverable Description Box */}
-          <div className="card p-6 bg-surface border border-subtle shadow-sm space-y-3 rounded-2xl">
-            <div className="flex items-center justify-between border-b border-subtle/80 pb-3">
-              <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
-                <FileText size={15} style={{ color: 'var(--blue)' }} />
-                <span>Deliverable Description</span>
-              </div>
-              <span className="text-[11px] text-muted font-mono">{task.taskId}</span>
-            </div>
-            <div style={{
-              padding: '16px 20px',
-              borderRadius: '12px',
-              background: 'var(--bg-elevated)',
-              border: '1px solid var(--border-default)',
-              fontSize: '14px',
-              color: 'var(--text-primary)',
-              lineHeight: 1.6,
-              whiteSpace: 'pre-wrap',
-              minHeight: '60px'
-            }}>
-              {task.description ? (
-                task.description
-              ) : (
-                <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No detailed description provided for this deliverable.</span>
-              )}
-            </div>
-          </div>
 
           {/* Review Submission Comment & Notes */}
           {latestReviewComment && (
@@ -1280,52 +1253,6 @@ export function TaskDetailsPage() {
         {/* Right Sidebar Metadata (1/3) */}
         <div className="space-y-5">
           
-          {/* Card 1: Project & Customer Context */}
-          <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
-            <div className="text-xs font-bold text-muted uppercase tracking-wider flex items-center gap-2 border-b border-subtle pb-2.5">
-              <FolderKanban size={15} style={{ color: '#60a5fa' }} /> Project & Context
-            </div>
-
-            {task.project ? (
-              <div 
-                className="p-3.5 rounded-xl cursor-pointer transition group"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(79, 70, 229, 0.06) 100%)',
-                  border: '1px solid rgba(96, 165, 250, 0.25)',
-                }}
-                onClick={() => navigate(`/projects/${task.project.id}`)}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider flex items-center gap-1" style={{ color: '#93c5fd' }}>
-                    <FolderKanban size={12} style={{ color: '#60a5fa' }} /> Project
-                  </span>
-                  <span className="text-[10px] text-muted">Click to view</span>
-                </div>
-                <div className="text-sm font-bold text-primary group-hover:text-blue-400 transition-colors">
-                  {task.project.name}
-                </div>
-                <div className="text-[11px] text-muted mt-1 flex items-center gap-1 group-hover:text-secondary transition-colors">
-                  <span>Open master project dashboard & team</span>
-                  <ArrowRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-muted italic p-2 rounded-lg bg-elevated/50">No project linked</div>
-            )}
-
-            {task.customer && (
-              <div 
-                className="p-3 rounded-xl bg-elevated/50 border border-subtle cursor-pointer hover:border-emerald-500/40 transition group"
-                onClick={() => navigate(`/customers/${task.customer.id}`)}
-              >
-                <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Customer Account</div>
-                <div className="text-sm font-bold text-primary group-hover:text-emerald-400 transition-colors">
-                  {task.customer.name}
-                </div>
-                <div className="text-[11px] text-muted font-mono mt-0.5">{task.customer.code} • Customer 360</div>
-              </div>
-            )}
-          </div>
 
           {/* Card 2: People & Ownership */}
           <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-4 rounded-2xl">
