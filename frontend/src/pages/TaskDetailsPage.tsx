@@ -272,8 +272,8 @@ export function TaskDetailsPage() {
     const liveSession = elapsedHours > 0 && elapsedHours < 0.1 ? 0.1 : elapsedHours;
     totalLoggedHours = Math.max(totalLoggedHours, Number((baseHours + liveSession).toFixed(1)));
   }
-  const estimatedHours = task.estimatedHours || 0;
-  const effortPct = estimatedHours > 0 ? Math.min(100, Math.round((totalLoggedHours / estimatedHours) * 100)) : 0;
+  const estimatedHours = task.estimatedHours && Number(task.estimatedHours) > 0 ? Number(task.estimatedHours) : 4;
+  const effortPct = Math.min(100, Math.round((totalLoggedHours / estimatedHours) * 100));
   const comments = task.comments || [];
 
   // Find the latest review submission comment if any
@@ -544,7 +544,7 @@ export function TaskDetailsPage() {
                     color: isTimeExceeded ? '#ef4444' : '#22c55e',
                     lineHeight: 1.2
                   }}>
-                    {totalLoggedHours}h <span style={{ color: isTimeExceeded ? 'rgba(239, 68, 68, 0.65)' : 'rgba(34, 197, 94, 0.65)', fontWeight: 600, fontSize: '13px' }}>/ {estimatedHours || 4}h</span>
+                    {totalLoggedHours}h <span style={{ color: isTimeExceeded ? 'rgba(239, 68, 68, 0.65)' : 'rgba(34, 197, 94, 0.65)', fontWeight: 600, fontSize: '13px' }}>/ {estimatedHours}h</span>
                   </div>
                 </div>
 
