@@ -289,7 +289,8 @@ export function TaskDetailsPage() {
     borderColor: 'rgba(148, 163, 184, 0.2)'
   };
 
-  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && currentStatusKey !== 'DONE';
+  const isTimeExceeded = estimatedHours > 0 && totalLoggedHours > estimatedHours;
+  const isOverdue = (isTimeExceeded || (task.dueDate && new Date(task.dueDate) < new Date() && totalLoggedHours >= estimatedHours)) && currentStatusKey !== 'DONE';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 max-w-7xl mx-auto pb-16">

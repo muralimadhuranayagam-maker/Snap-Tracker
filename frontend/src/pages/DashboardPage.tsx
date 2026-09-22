@@ -156,12 +156,13 @@ export function DashboardPage() {
     const isOverHours = act > est;
     const isBlocked = t.status?.name === 'BLOCKED';
 
+    // Only tasks that exceeded their allocated hours (time exceeded) should be shown as OVERDUE
     let pacing: 'ON_TRACK' | 'AT_RISK' | 'OVERDUE' | 'BLOCKED' = 'ON_TRACK';
     if (isBlocked) {
       pacing = 'BLOCKED';
-    } else if (isPastDue) {
+    } else if (isOverHours) {
       pacing = 'OVERDUE';
-    } else if (isOverHours || isDueSoon || pct >= 85) {
+    } else if (pct >= 85 || isDueSoon) {
       pacing = 'AT_RISK';
     } else {
       pacing = 'ON_TRACK';
@@ -659,7 +660,7 @@ export function DashboardPage() {
                                   +{(task.computedAct - task.computedEst).toFixed(1)}h over
                                 </div>
                                 <div className="text-[10px] text-muted">
-                                  {task.dueDate ? `Due ${formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}` : 'No deadline'}
+                                  Time exceeded by {(task.computedAct - task.computedEst).toFixed(1)}h
                                 </div>
                               </div>
                             ) : (
@@ -669,7 +670,9 @@ export function DashboardPage() {
                                   ~{task.computedRemaining}h remaining
                                 </div>
                                 <div className="text-[10px] text-muted">
-                                  {task.dueDate ? `Due ${formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}` : 'No deadline'}
+                                  {task.dueDate && !task.isPastDue
+                                    ? `Due ${formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}`
+                                    : `${task.computedRemaining}h left of ${task.computedEst}h allocated`}
                                 </div>
                               </div>
                             )}
