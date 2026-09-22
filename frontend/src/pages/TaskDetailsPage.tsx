@@ -378,10 +378,10 @@ export function TaskDetailsPage() {
           <div className="task-review-banner-container">
             {/* Left Section: Big Avatar + User Information */}
             <div className="task-review-left-section">
-              <div className="relative shrink-0" style={{ width: '64px', height: '64px' }}>
+              <div className="relative shrink-0" style={{ width: '56px', height: '56px' }}>
                 <div className="task-review-avatar">
                   {performer?.avatar ? (
-                    <img src={performer.avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: '16px', objectFit: 'cover' }} />
+                    <img src={performer.avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: '14px', objectFit: 'cover' }} />
                   ) : (
                     (performer?.name || 'U').charAt(0).toUpperCase()
                   )}
@@ -389,40 +389,58 @@ export function TaskDetailsPage() {
                 <span 
                   style={{
                     position: 'absolute',
-                    bottom: '-4px',
-                    right: '-4px',
-                    width: '16px',
-                    height: '16px',
+                    bottom: '-2px',
+                    right: '-2px',
+                    width: '14px',
+                    height: '14px',
                     backgroundColor: '#22c55e',
-                    border: '3px solid var(--bg-surface)',
+                    border: '2.5px solid var(--bg-surface)',
                     borderRadius: '50%',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
                   }} 
                   title="Active Assignee & Deliverer" 
                 />
               </div>
 
               <div className="task-review-content">
-                {/* Badges Row */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                {/* Row 1: Status & Submission Eyebrow */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
                     fontSize: '11px',
-                    fontWeight: 800,
+                    fontWeight: 700,
                     textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    padding: '3px 10px',
+                    letterSpacing: '0.05em',
+                    padding: '2px 8px',
                     borderRadius: '6px',
                     background: 'rgba(245, 158, 11, 0.15)',
-                    color: '#d97706',
-                    border: '1px solid rgba(245, 158, 11, 0.35)'
+                    color: '#f59e0b',
+                    border: '1px solid rgba(245, 158, 11, 0.3)'
                   }}>
-                    Needs Super Admin Review & Approval
+                    <ShieldCheck size={12} />
+                    <span>Needs Review & Approval</span>
+                  </span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>•</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                    Submitted {format(new Date(latestReviewComment?.createdAt || task.updatedAt), 'MMM d, yyyy • h:mm a')}
+                  </span>
+                </div>
+
+                {/* Row 2: Hero Employee Name & Badges */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    Task Completed by
+                  </span>
+                  <span className="task-review-user-name">
+                    {performer?.name || 'Assigned Employee'}
                   </span>
                   {task.department && (
                     <span style={{
                       fontSize: '11px',
                       fontWeight: 800,
-                      padding: '3px 10px',
+                      padding: '2px 7px',
                       borderRadius: '6px',
                       background: 'var(--bg-elevated)',
                       color: 'var(--text-primary)',
@@ -432,35 +450,35 @@ export function TaskDetailsPage() {
                       {task.department.code || task.department.name}
                     </span>
                   )}
-                </div>
-
-                {/* Sub-label */}
-                <div className="task-review-sub-label">
-                  Task Completed & Submitted By:
-                </div>
-
-                {/* Huge Employee Name */}
-                <div className="task-review-user-name">
-                  {performer?.name || 'Assigned Employee'}
-                </div>
-
-                {/* Details & Metadata Row */}
-                <div className="task-review-meta">
-                  {performer?.email && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                      <Mail size={13} style={{ opacity: 0.7 }} />
-                      {performer.email}
-                    </span>
-                  )}
-                  {task.department?.name && (
-                    <span>• {task.department.name}</span>
-                  )}
-                  {latestReviewComment?.createdAt && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                      • Submitted {format(new Date(latestReviewComment.createdAt), 'MMM d, yyyy • h:mm a')}
+                  {task.assignee?.id === performer?.id && (
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '2px 7px',
+                      borderRadius: '6px',
+                      background: 'var(--green-subtle)',
+                      color: 'var(--green)',
+                      border: '1px solid rgba(34, 197, 94, 0.25)'
+                    }}>
+                      Assignee & Owner
                     </span>
                   )}
                 </div>
+
+                {/* Row 3: Contact & Department Details */}
+                {(performer?.email || task.department?.name) && (
+                  <div className="task-review-meta">
+                    {performer?.email && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <Mail size={12} style={{ opacity: 0.75 }} />
+                        {performer.email}
+                      </span>
+                    )}
+                    {task.department?.name && (
+                      <span>• {task.department.name}</span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -475,20 +493,20 @@ export function TaskDetailsPage() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
-                    fontSize: '14px',
-                    fontWeight: 800,
-                    padding: '12px 26px',
-                    borderRadius: '12px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    padding: '10px 22px',
+                    borderRadius: '10px',
                     backgroundColor: '#16a34a',
                     color: '#ffffff',
                     border: '1px solid #15803d',
-                    boxShadow: '0 4px 16px rgba(22, 163, 74, 0.4)',
+                    boxShadow: '0 2px 10px rgba(22, 163, 74, 0.35)',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
                     whiteSpace: 'nowrap'
                   }}
                 >
-                  <CheckCircle2 size={18} />
+                  <CheckCircle2 size={16} />
                   <span>{isApproving ? 'Approving...' : 'Approve Task'}</span>
                 </button>
                 <button
@@ -498,20 +516,20 @@ export function TaskDetailsPage() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
-                    fontSize: '14px',
-                    fontWeight: 800,
-                    padding: '12px 26px',
-                    borderRadius: '12px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    padding: '10px 22px',
+                    borderRadius: '10px',
                     backgroundColor: '#dc2626',
                     color: '#ffffff',
                     border: '1px solid #b91c1c',
-                    boxShadow: '0 4px 16px rgba(220, 38, 38, 0.4)',
+                    boxShadow: '0 2px 10px rgba(220, 38, 38, 0.35)',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
                     whiteSpace: 'nowrap'
                   }}
                 >
-                  <XCircle size={18} />
+                  <XCircle size={16} />
                   <span>Reject Task</span>
                 </button>
               </div>
