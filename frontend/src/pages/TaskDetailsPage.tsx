@@ -30,7 +30,6 @@ import {
   Video,
   Image as ImageIcon,
   Download,
-  UserCheck,
   Mail
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -482,58 +481,89 @@ export function TaskDetailsPage() {
               </div>
             </div>
 
-            {/* Right Section: Action Buttons - Always Right-Aligned */}
-            {isAdminOrSuper && (
-              <div className="task-review-actions-section">
-                <button
-                  onClick={handleApproveTask}
-                  disabled={isApproving}
-                  className="btn btn-approve-solid"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    padding: '10px 22px',
-                    borderRadius: '10px',
-                    backgroundColor: '#16a34a',
-                    color: '#ffffff',
-                    border: '1px solid #15803d',
-                    boxShadow: '0 2px 10px rgba(22, 163, 74, 0.35)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  <CheckCircle2 size={16} />
-                  <span>{isApproving ? 'Approving...' : 'Approve Task'}</span>
-                </button>
-                <button
-                  onClick={() => setIsRejectModalOpen(true)}
-                  className="btn btn-reject-solid"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    padding: '10px 22px',
-                    borderRadius: '10px',
-                    backgroundColor: '#dc2626',
-                    color: '#ffffff',
-                    border: '1px solid #b91c1c',
-                    boxShadow: '0 2px 10px rgba(220, 38, 38, 0.35)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  <XCircle size={16} />
-                  <span>Reject Task</span>
-                </button>
+            {/* Right Section: Effort Logged & Priority Details + Action Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginLeft: 'auto', flexWrap: 'wrap', flexShrink: 0 }}>
+              {/* Quick Metrics: Effort Logged & Priority */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '20px',
+                paddingRight: isAdminOrSuper ? '20px' : '0px',
+                borderRight: isAdminOrSuper ? '1px solid var(--border-default)' : 'none',
+                flexShrink: 0
+              }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>
+                    Effort Logged
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)' }}>
+                    {totalLoggedHours}h <span style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '13px' }}>/ {estimatedHours || 4}h</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>
+                    Priority
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: 900, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                    {task.priority?.name || 'MEDIUM'}
+                  </div>
+                </div>
               </div>
-            )}
+
+              {/* Action Buttons: Approve & Reject */}
+              {isAdminOrSuper && (
+                <div className="task-review-actions-section" style={{ margin: 0 }}>
+                  <button
+                    onClick={handleApproveTask}
+                    disabled={isApproving}
+                    className="btn btn-approve-solid"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      padding: '10px 22px',
+                      borderRadius: '10px',
+                      backgroundColor: '#16a34a',
+                      color: '#ffffff',
+                      border: '1px solid #15803d',
+                      boxShadow: '0 2px 10px rgba(22, 163, 74, 0.35)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    <CheckCircle2 size={16} />
+                    <span>{isApproving ? 'Approving...' : 'Approve Task'}</span>
+                  </button>
+                  <button
+                    onClick={() => setIsRejectModalOpen(true)}
+                    className="btn btn-reject-solid"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      padding: '10px 22px',
+                      borderRadius: '10px',
+                      backgroundColor: '#dc2626',
+                      color: '#ffffff',
+                      border: '1px solid #b91c1c',
+                      boxShadow: '0 2px 10px rgba(220, 38, 38, 0.35)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    <XCircle size={16} />
+                    <span>Reject Task</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -588,131 +618,7 @@ export function TaskDetailsPage() {
             </h1>
           </div>
 
-          {/* HIGH-VISIBILITY EMPLOYEE ATTRIBUTION SHOWCASE CARD */}
-          <div className="task-executed-showcase">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: '1 1 auto', minWidth: '260px' }}>
-              <div className="relative shrink-0" style={{ width: '56px', height: '56px' }}>
-                <div style={{
-                  width: '56px',
-                  height: '56px',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
-                  color: '#ffffff',
-                  fontWeight: 900,
-                  fontSize: '22px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
-                  border: '2px solid rgba(255, 255, 255, 0.15)',
-                  flexShrink: 0
-                }}>
-                  {performer?.avatar ? (
-                    <img src={performer.avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: '14px', objectFit: 'cover' }} />
-                  ) : (
-                    (performer?.name || 'U').charAt(0).toUpperCase()
-                  )}
-                </div>
-                <span style={{
-                  position: 'absolute',
-                  bottom: '-3px',
-                  right: '-3px',
-                  width: '14px',
-                  height: '14px',
-                  backgroundColor: '#22c55e',
-                  border: '2px solid var(--bg-surface)',
-                  borderRadius: '50%'
-                }} />
-              </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <div style={{ 
-                  fontSize: '11px', 
-                  fontWeight: 800, 
-                  textTransform: 'uppercase', 
-                  letterSpacing: '0.06em', 
-                  color: 'var(--blue)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}>
-                  <UserCheck size={13} style={{ color: 'var(--blue)' }} />
-                  <span>Task Executed & Handled By</span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                  <span style={{
-                    fontSize: '24px',
-                    fontWeight: 900,
-                    color: 'var(--text-primary)',
-                    lineHeight: 1.2
-                  }}>
-                    {performer?.name || 'Unassigned'}
-                  </span>
-                  {task.department && (
-                    <span style={{
-                      fontSize: '11px',
-                      fontWeight: 800,
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                      background: 'var(--blue-subtle)',
-                      color: 'var(--blue)',
-                      border: '1px solid rgba(96, 165, 250, 0.25)',
-                      fontFamily: 'var(--font-mono)'
-                    }}>
-                      {task.department.code || task.department.name}
-                    </span>
-                  )}
-                  {task.assignee?.id === performer?.id && (
-                    <span style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                      background: 'var(--green-subtle)',
-                      color: 'var(--green)',
-                      border: '1px solid rgba(34, 197, 94, 0.25)'
-                    }}>
-                      Assignee & Owner
-                    </span>
-                  )}
-                </div>
-
-                {performer?.email && (
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    {performer.email}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Quick Metrics */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '24px',
-              paddingLeft: '20px',
-              borderLeft: '1px solid var(--border-default)',
-              flexShrink: 0
-            }}>
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                  Effort Logged
-                </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '17px', fontWeight: 800, color: 'var(--accent)' }}>
-                  {totalLoggedHours}h / {estimatedHours || 4}h
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                  Priority
-                </div>
-                <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase' }}>
-                  {task.priority?.name || 'MEDIUM'}
-                </div>
-              </div>
-            </div>
-          </div>
 
           <div className="flex items-center gap-5 sm:gap-7 flex-wrap pt-2">
             {/* Status Custom Dropdown */}
