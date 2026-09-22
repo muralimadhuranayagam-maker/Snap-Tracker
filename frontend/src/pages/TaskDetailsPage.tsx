@@ -19,10 +19,8 @@ import {
   ShieldCheck,
   Sparkles,
   Calendar,
-  Layers,
   ArrowRight,
   ChevronDown,
-  History as HistoryIcon,
   X,
   Check,
   CheckCircle2,
@@ -76,7 +74,6 @@ export function TaskDetailsPage() {
   const { user } = useAuthStore();
   const isAdminOrSuper = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'worklogs' | 'dependencies' | 'history'>('overview');
   const [newComment, setNewComment] = useState('');
   const [isLogWorkModalOpen, setIsLogWorkModalOpen] = useState(false);
   const [logHours, setLogHours] = useState('');
@@ -266,12 +263,8 @@ export function TaskDetailsPage() {
   // Derived metrics
   const totalLoggedHours = task.worklogs?.reduce((sum: number, w: any) => sum + Number(w.hours), 0) || 0;
   const estimatedHours = task.estimatedHours || 0;
-  const remainingHours = Math.max(0, estimatedHours - totalLoggedHours);
   const effortPct = estimatedHours > 0 ? Math.min(100, Math.round((totalLoggedHours / estimatedHours) * 100)) : 0;
   const comments = task.comments || [];
-  const worklogs = task.worklogs || [];
-  const blockedByDeps = task.blockedByDeps || [];
-  const blockingDeps = task.blockingDeps || [];
 
   // Find the latest review submission comment if any
   const latestReviewComment = comments.slice().reverse().find((c: any) => 
@@ -708,305 +701,155 @@ export function TaskDetailsPage() {
         {/* Left Column (2/3) */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Navigation Pill Tabs */}
-          <div className="flex bg-elevated/60 p-1 rounded-xl border border-subtle gap-1 overflow-x-auto">
-            <button
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
-                activeTab === 'overview' 
-                  ? 'bg-surface text-primary shadow-xs border border-subtle' 
-                  : 'text-muted hover:text-primary hover:bg-surface/50 font-medium'
-              }`}
-              onClick={() => setActiveTab('overview')}
-            >
-              <FileText size={14} /> Overview
-            </button>
-            
-            <button
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
-                activeTab === 'comments' 
-                  ? 'bg-surface text-primary shadow-xs border border-subtle' 
-                  : 'text-muted hover:text-primary hover:bg-surface/50 font-medium'
-              }`}
-              onClick={() => setActiveTab('comments')}
-            >
-              <MessageSquare size={14} /> Comments
-              {comments.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-accent/10 text-accent font-mono text-[10px]">
-                  {comments.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
-                activeTab === 'worklogs' 
-                  ? 'bg-surface text-primary shadow-xs border border-subtle' 
-                  : 'text-muted hover:text-primary hover:bg-surface/50 font-medium'
-              }`}
-              onClick={() => setActiveTab('worklogs')}
-            >
-              <Clock size={14} /> Worklogs
-              <span className="px-1.5 py-0.2 rounded-full bg-accent/10 text-accent font-mono text-[10px]">
-                {totalLoggedHours}h
-              </span>
-            </button>
-
-            <button
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
-                activeTab === 'dependencies' 
-                  ? 'bg-surface text-primary shadow-xs border border-subtle' 
-                  : 'text-muted hover:text-primary hover:bg-surface/50 font-medium'
-              }`}
-              onClick={() => setActiveTab('dependencies')}
-            >
-              <Layers size={14} /> Dependencies
-              {(blockedByDeps.length + blockingDeps.length) > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-accent/10 text-accent font-mono text-[10px]">
-                  {blockedByDeps.length + blockingDeps.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
-                activeTab === 'history' 
-                  ? 'bg-surface text-primary shadow-xs border border-subtle' 
-                  : 'text-muted hover:text-primary hover:bg-surface/50 font-medium'
-              }`}
-              onClick={() => setActiveTab('history')}
-            >
-              <HistoryIcon size={14} /> Audit Trail
-            </button>
+          {/* Overview Section */}
+          <div className="flex items-center gap-2">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-surface border border-subtle text-xs font-bold text-primary shadow-xs">
+              <FileText size={14} className="text-accent" />
+              <span>Overview</span>
+            </div>
           </div>
 
-          {/* TAB 1: OVERVIEW */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* Task Description */}
-              <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
-                <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
-                  <FileText size={14} className="text-accent" /> Description
+          <div className="space-y-6">
+            {/* Task Description */}
+            <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
+              <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
+                <FileText size={14} className="text-accent" /> Description
+              </div>
+              <div className="text-sm text-primary leading-relaxed whitespace-pre-wrap pl-1">
+                {task.description || (
+                  <span className="text-muted italic">No detailed description provided for this deliverable.</span>
+                )}
+              </div>
+            </div>
+
+            {/* Review Submission Comment & Notes (Directly displayed on the first page) */}
+            {latestReviewComment && (
+              <div className="card p-5 bg-amber-500/5 border border-amber-500/30 shadow-sm space-y-3 rounded-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs shrink-0 border border-amber-500/30">
+                      <ShieldCheck size={16} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-amber-300 flex items-center gap-2">
+                        <span>User Review Submission Note</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                          By {latestReviewComment.user?.name || 'Assignee'}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-muted">
+                        {format(new Date(latestReviewComment.createdAt), 'MMM d, yyyy • h:mm a')}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-sm text-primary leading-relaxed whitespace-pre-wrap pl-1">
-                  {task.description || (
-                    <span className="text-muted italic">No detailed description provided for this deliverable.</span>
-                  )}
+                <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap bg-surface/90 p-4 rounded-xl border border-subtle">
+                  {latestReviewComment.content.replace('**[SUBMITTED FOR REVIEW]**', '').trim()}
                 </div>
               </div>
+            )}
 
-              {/* Review Submission Comment & Notes (Directly displayed on the first page) */}
-              {latestReviewComment && (
-                <div className="card p-5 bg-amber-500/5 border border-amber-500/30 shadow-sm space-y-3 rounded-2xl">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs shrink-0 border border-amber-500/30">
-                        <ShieldCheck size={16} />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-amber-300 flex items-center gap-2">
-                          <span>User Review Submission Note</span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20">
-                            By {latestReviewComment.user?.name || 'Assignee'}
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-muted">
-                          {format(new Date(latestReviewComment.createdAt), 'MMM d, yyyy • h:mm a')}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap bg-surface/90 p-4 rounded-xl border border-subtle">
-                    {latestReviewComment.content.replace('**[SUBMITTED FOR REVIEW]**', '').trim()}
-                  </div>
-                </div>
-              )}
-
-              {/* Uploaded Verification Files & Attachments */}
-              {task.attachments && task.attachments.length > 0 && (
-                <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
-                      <Paperclip size={14} className="text-amber-400" />
-                      <span>Review Verification Files & Attachments ({task.attachments.length})</span>
-                    </div>
-                    <span className="text-[11px] text-muted">Inspect uploaded proof</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                    {task.attachments.map((att: any) => {
-                      const isImg = att.mimeType?.startsWith('image/');
-                      const isAudio = att.mimeType?.startsWith('audio/');
-                      const isVid = att.mimeType?.startsWith('video/');
-
-                      return (
-                        <div 
-                          key={att.id}
-                          className="p-3 rounded-xl bg-surface-hover/80 border border-subtle flex flex-col gap-2 transition-all hover:border-amber-500/30"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 truncate">
-                              {isImg && <ImageIcon size={16} className="text-blue-400 shrink-0" />}
-                              {isAudio && <Music size={16} className="text-purple-400 shrink-0" />}
-                              {isVid && <Video size={16} className="text-amber-400 shrink-0" />}
-                              {!isImg && !isAudio && !isVid && <FileText size={16} className="text-emerald-400 shrink-0" />}
-                              <span className="text-xs font-medium text-primary truncate max-w-[200px]" title={att.originalName}>
-                                {att.originalName}
-                              </span>
-                            </div>
-                            <a
-                              href={att.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              download
-                              className="text-muted hover:text-primary p-1 rounded hover:bg-surface transition-colors shrink-0"
-                              title="Download file"
-                            >
-                              <Download size={14} />
-                            </a>
-                          </div>
-
-                          {/* Image preview */}
-                          {isImg && (
-                            <div className="mt-1 rounded-lg overflow-hidden border border-subtle max-h-48 bg-black/20 flex items-center justify-center">
-                              <a href={att.url} target="_blank" rel="noreferrer">
-                                <img src={att.url} alt={att.originalName} className="object-cover w-full h-auto max-h-48 hover:opacity-90 transition-opacity" />
-                              </a>
-                            </div>
-                          )}
-
-                          {/* Audio player preview */}
-                          {isAudio && (
-                            <div className="mt-1 p-2 rounded-lg bg-black/20 border border-subtle">
-                              <audio controls className="w-full h-8" preload="metadata">
-                                <source src={att.url} type={att.mimeType} />
-                                Your browser does not support audio element.
-                              </audio>
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-between text-[10px] text-muted font-mono pt-0.5">
-                            <span>{(att.size / 1024).toFixed(1)} KB</span>
-                            <span>{att.createdAt ? format(new Date(att.createdAt), 'MMM d, h:mm a') : ''}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Comments & Discussion Directly on the First Page */}
-              <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-4 rounded-2xl">
+            {/* Uploaded Verification Files & Attachments */}
+            {task.attachments && task.attachments.length > 0 && (
+              <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
-                    <MessageSquare size={14} className="text-accent" />
-                    <span>Comments & Discussion ({comments.length})</span>
+                    <Paperclip size={14} className="text-amber-400" />
+                    <span>Review Verification Files & Attachments ({task.attachments.length})</span>
                   </div>
-                  <span className="text-[11px] text-muted">Full activity & notes</span>
+                  <span className="text-[11px] text-muted">Inspect uploaded proof</span>
                 </div>
 
-                {/* Inline Comment Input */}
-                <div className="space-y-2 pt-1">
-                  <textarea
-                    className="input text-xs w-full min-h-[75px] p-3 resize-none rounded-xl"
-                    style={{
-                      backgroundColor: '#1f2029',
-                      color: '#f3f4f6',
-                      border: '1px solid rgba(255, 255, 255, 0.12)'
-                    }}
-                    placeholder="Add a progress update, ask a question, or leave feedback directly on this task..."
-                    value={newComment}
-                    onChange={e => setNewComment(e.target.value)}
-                  />
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-muted">AI engine automatically scans comments for blockers</span>
-                    <button
-                      className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm text-xs font-semibold px-3.5 py-1.5"
-                      disabled={!newComment.trim() || postCommentMutation.isPending}
-                      onClick={() => postCommentMutation.mutate(newComment)}
-                    >
-                      <Send size={12} /> Post Comment
-                    </button>
-                  </div>
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  {task.attachments.map((att: any) => {
+                    const isImg = att.mimeType?.startsWith('image/');
+                    const isAudio = att.mimeType?.startsWith('audio/');
+                    const isVid = att.mimeType?.startsWith('video/');
 
-                {/* Comments Feed on First Page */}
-                <div className="space-y-3 pt-1">
-                  {comments.map((comment: any) => (
-                    <div key={comment.id} className="p-3.5 rounded-xl bg-surface-hover/70 border border-subtle space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 border border-subtle text-white font-bold text-[11px] flex items-center justify-center shadow-xs shrink-0">
-                            {comment.user?.avatar ? (
-                              <img src={comment.user.avatar} alt="" className="w-full h-full rounded-full object-cover" />
-                            ) : (
-                              comment.user?.name?.charAt(0).toUpperCase() || '?'
-                            )}
+                    return (
+                      <div 
+                        key={att.id}
+                        className="p-3 rounded-xl bg-surface-hover/80 border border-subtle flex flex-col gap-2 transition-all hover:border-amber-500/30"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 truncate">
+                            {isImg && <ImageIcon size={16} className="text-blue-400 shrink-0" />}
+                            {isAudio && <Music size={16} className="text-purple-400 shrink-0" />}
+                            {isVid && <Video size={16} className="text-amber-400 shrink-0" />}
+                            {!isImg && !isAudio && !isVid && <FileText size={16} className="text-emerald-400 shrink-0" />}
+                            <span className="text-xs font-medium text-primary truncate max-w-[200px]" title={att.originalName}>
+                              {att.originalName}
+                            </span>
                           </div>
-                          <div>
-                            <div className="text-xs font-bold text-primary">{comment.user?.name}</div>
-                            <div className="text-[10px] text-muted">{format(new Date(comment.createdAt), 'MMM d, yyyy • h:mm a')}</div>
-                          </div>
+                          <a
+                            href={att.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            download
+                            className="text-muted hover:text-primary p-1 rounded hover:bg-surface transition-colors shrink-0"
+                            title="Download file"
+                          >
+                            <Download size={14} />
+                          </a>
                         </div>
 
-                        {comment.aiFlag === 'BLOCKER' && (
-                          <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold tracking-wider">
-                            BLOCKER DETECTED
-                          </span>
+                        {/* Image preview */}
+                        {isImg && (
+                          <div className="mt-1 rounded-lg overflow-hidden border border-subtle max-h-48 bg-black/20 flex items-center justify-center">
+                            <a href={att.url} target="_blank" rel="noreferrer">
+                              <img src={att.url} alt={att.originalName} className="object-cover w-full h-auto max-h-48 hover:opacity-90 transition-opacity" />
+                            </a>
+                          </div>
                         )}
-                      </div>
 
-                      <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap pl-9">
-                        {comment.content}
-                      </div>
-                    </div>
-                  ))}
+                        {/* Audio player preview */}
+                        {isAudio && (
+                          <div className="mt-1 p-2 rounded-lg bg-black/20 border border-subtle">
+                            <audio controls className="w-full h-8" preload="metadata">
+                              <source src={att.url} type={att.mimeType} />
+                              Your browser does not support audio element.
+                            </audio>
+                          </div>
+                        )}
 
-                  {comments.length === 0 && (
-                    <div className="text-center py-6 text-muted text-xs">
-                      No comments recorded yet. Leave a note above.
-                    </div>
-                  )}
+                        <div className="flex items-center justify-between text-[10px] text-muted font-mono pt-0.5">
+                          <span>{(att.size / 1024).toFixed(1)} KB</span>
+                          <span>{att.createdAt ? format(new Date(att.createdAt), 'MMM d, h:mm a') : ''}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
+            )}
 
-              {/* AI Insights Card */}
-              {task.aiRisk && (
-                <div className="card p-5 bg-gradient-to-br from-surface via-surface to-purple-500/5 border border-purple-500/20 shadow-sm space-y-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded-md bg-purple-500/10 text-purple-400">
-                      <Sparkles size={16} />
-                    </div>
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider">AI Cycle Time & Risk Analysis</h4>
-                  </div>
-                  <div className="text-xs text-secondary space-y-1.5 pl-8">
-                    <div>Estimated Cycle Completion: <strong className="text-primary font-mono">{task.aiRisk.estimatedCompletionDays || 2} days</strong></div>
-                    {task.aiRisk.riskFactors?.length > 0 && (
-                      <div className="text-rose-400 font-medium">
-                        Risk Factor: {task.aiRisk.riskFactors.join(', ')}
-                      </div>
-                    )}
-                  </div>
+            {/* Comments & Discussion Directly on the Overview Page */}
+            <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-4 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
+                  <MessageSquare size={14} className="text-accent" />
+                  <span>Comments & Discussion ({comments.length})</span>
                 </div>
-              )}
-            </div>
-          )}
+                <span className="text-[11px] text-muted">Full activity & notes</span>
+              </div>
 
-          {/* TAB 2: COMMENTS */}
-          {activeTab === 'comments' && (
-            <div className="space-y-6">
-              {/* New Comment Input */}
-              <div className="card p-4 bg-surface border border-subtle shadow-sm space-y-3">
+              {/* Inline Comment Input */}
+              <div className="space-y-2 pt-1">
                 <textarea
-                  className="input text-xs w-full min-h-[80px] p-3 bg-elevated/50 focus:bg-elevated border-subtle"
-                  placeholder="Add a progress update, ask a question, or report a technical blocker..."
+                  className="input text-xs w-full min-h-[75px] p-3 resize-none rounded-xl"
+                  style={{
+                    backgroundColor: '#1f2029',
+                    color: '#f3f4f6',
+                    border: '1px solid rgba(255, 255, 255, 0.12)'
+                  }}
+                  placeholder="Add a progress update, ask a question, or leave feedback directly on this task..."
                   value={newComment}
                   onChange={e => setNewComment(e.target.value)}
                 />
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted">AI engine automatically scans comments for blockers</span>
+                  <span className="text-[10px] text-muted">AI engine automatically scans comments for blockers</span>
                   <button
-                    className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm text-xs font-semibold"
+                    className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm text-xs font-semibold px-3.5 py-1.5"
                     disabled={!newComment.trim() || postCommentMutation.isPending}
                     onClick={() => postCommentMutation.mutate(newComment)}
                   >
@@ -1015,13 +858,13 @@ export function TaskDetailsPage() {
                 </div>
               </div>
 
-              {/* Comments Feed */}
-              <div className="space-y-4">
+              {/* Comments Feed on First Page */}
+              <div className="space-y-3 pt-1">
                 {comments.map((comment: any) => (
-                  <div key={comment.id} className="card p-4 bg-surface border border-subtle shadow-sm space-y-3">
+                  <div key={comment.id} className="p-3.5 rounded-xl bg-surface-hover/70 border border-subtle space-y-2">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 border border-subtle text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 border border-subtle text-white font-bold text-[11px] flex items-center justify-center shadow-xs shrink-0">
                           {comment.user?.avatar ? (
                             <img src={comment.user.avatar} alt="" className="w-full h-full rounded-full object-cover" />
                           ) : (
@@ -1041,174 +884,40 @@ export function TaskDetailsPage() {
                       )}
                     </div>
 
-                    <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap pl-11">
+                    <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap pl-9">
                       {comment.content}
                     </div>
                   </div>
                 ))}
 
                 {comments.length === 0 && (
-                  <div className="card text-center py-12 border border-subtle bg-surface/50">
-                    <MessageSquare size={32} className="text-muted mx-auto mb-2" />
-                    <div className="text-xs font-semibold text-primary">No comments recorded</div>
-                    <div className="text-[11px] text-muted mt-0.5">Be the first to leave an update on this task above.</div>
+                  <div className="text-center py-6 text-muted text-xs">
+                    No comments recorded yet. Leave a note above.
                   </div>
                 )}
               </div>
             </div>
-          )}
 
-          {/* TAB 3: WORKLOGS */}
-          {activeTab === 'worklogs' && (
-            <div className="space-y-6">
-              {/* Summary Effort Cards */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="card p-4 bg-surface border border-subtle shadow-sm">
-                  <div className="text-xs text-muted font-medium">Estimated Effort</div>
-                  <div className="text-xl font-bold font-mono text-primary mt-1">{estimatedHours} hrs</div>
-                </div>
-
-                <div className="card p-4 bg-surface border border-subtle shadow-sm">
-                  <div className="text-xs text-muted font-medium">Actual Logged</div>
-                  <div className="text-xl font-bold font-mono text-accent mt-1">{totalLoggedHours} hrs</div>
-                </div>
-
-                <div className="card p-4 bg-surface border border-subtle shadow-sm">
-                  <div className="text-xs text-muted font-medium">Remaining Effort</div>
-                  <div className="text-xl font-bold font-mono text-emerald-400 mt-1">{remainingHours} hrs</div>
-                </div>
-              </div>
-
-              {/* Worklogs Table */}
-              <div className="card overflow-hidden border border-subtle shadow-sm bg-surface">
-                <div className="table-responsive">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-elevated/70 border-b border-subtle text-[11px] font-bold text-muted uppercase tracking-wider">
-                        <th className="py-3.5 px-4">Engineer</th>
-                        <th className="py-3.5 px-4">Hours</th>
-                        <th className="py-3.5 px-4">Work Description</th>
-                        <th className="py-3.5 px-4 text-right">Log Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-subtle/60 text-xs">
-                      {worklogs.map((w: any) => (
-                        <tr key={w.id} className="hover:bg-elevated/40 transition-colors">
-                          <td className="py-3.5 px-4 font-semibold text-primary">
-                            {w.user?.name || 'Engineer'}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono font-bold text-accent">
-                            {w.hours} hrs
-                          </td>
-                          <td className="py-3.5 px-4 text-secondary">
-                            {w.description || '—'}
-                          </td>
-                          <td className="py-3.5 px-4 text-right text-muted whitespace-nowrap">
-                            {format(new Date(w.logDate || w.createdAt), 'MMM d, yyyy')}
-                          </td>
-                        </tr>
-                      ))}
-
-                      {worklogs.length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="text-center py-10 text-xs text-muted">
-                            No effort logged yet. Click "+ Log Work" at the top right.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: DEPENDENCIES */}
-          {activeTab === 'dependencies' && (
-            <div className="space-y-6">
-              {/* Prerequisite Tasks */}
-              <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
-                <h4 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
-                  <AlertCircle size={15} className="text-rose-400" /> Prerequisite Tasks (Blocked By)
-                </h4>
-                {blockedByDeps.length > 0 ? (
-                  <div className="space-y-2 pt-1">
-                    {blockedByDeps.map((dep: any) => (
-                      <div 
-                        key={dep.id} 
-                        className="flex items-center justify-between p-3 bg-elevated/60 rounded-xl border border-subtle cursor-pointer hover:border-accent/40 transition"
-                        onClick={() => navigate(`/tasks/${dep.source?.id}`)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs font-bold text-accent">{dep.source?.taskId}</span>
-                          <span className="text-xs text-primary font-medium">{dep.source?.title}</span>
-                        </div>
-                        <span className="badge bg-surface text-secondary text-[10px] font-semibold border border-subtle">
-                          {dep.source?.status?.name?.replace('_', ' ')}
-                        </span>
-                      </div>
-                    ))}
+            {/* AI Insights Card */}
+            {task.aiRisk && (
+              <div className="card p-5 bg-gradient-to-br from-surface via-surface to-purple-500/5 border border-purple-500/20 shadow-sm space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-purple-500/10 text-purple-400">
+                    <Sparkles size={16} />
                   </div>
-                ) : (
-                  <p className="text-xs text-muted italic pl-1">This task is not blocked by any prerequisites.</p>
-                )}
-              </div>
-
-              {/* Subsequent Tasks */}
-              <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
-                <h4 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2">
-                  <ArrowRight size={15} className="text-blue-400" /> Subsequent Tasks (Blocking)
-                </h4>
-                {blockingDeps.length > 0 ? (
-                  <div className="space-y-2 pt-1">
-                    {blockingDeps.map((dep: any) => (
-                      <div 
-                        key={dep.id} 
-                        className="flex items-center justify-between p-3 bg-elevated/60 rounded-xl border border-subtle cursor-pointer hover:border-accent/40 transition"
-                        onClick={() => navigate(`/tasks/${dep.target?.id}`)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs font-bold text-accent">{dep.target?.taskId}</span>
-                          <span className="text-xs text-primary font-medium">{dep.target?.title}</span>
-                        </div>
-                        <span className="badge bg-surface text-secondary text-[10px] font-semibold border border-subtle">
-                          {dep.target?.status?.name?.replace('_', ' ')}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted italic pl-1">This task does not block any subsequent deliverables.</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: AUDIT TRAIL HISTORY */}
-          {activeTab === 'history' && (
-            <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
-              <h4 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-2 border-b border-subtle pb-3">
-                <HistoryIcon size={15} className="text-accent" /> Audit Trail Events
-              </h4>
-              <div className="space-y-3 pt-1">
-                {task.history?.map((item: any) => (
-                  <div key={item.id} className="flex items-center justify-between text-xs border-b border-subtle/50 pb-2.5">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-primary">{item.action.replace(/_/g, ' ')}</span>
-                      {item.field && <span className="text-muted">on <code className="text-accent font-mono">{item.field}</code></span>}
+                  <h4 className="text-xs font-bold text-primary uppercase tracking-wider">AI Cycle Time & Risk Analysis</h4>
+                </div>
+                <div className="text-xs text-secondary space-y-1.5 pl-8">
+                  <div>Estimated Cycle Completion: <strong className="text-primary font-mono">{task.aiRisk.estimatedCompletionDays || 2} days</strong></div>
+                  {task.aiRisk.riskFactors?.length > 0 && (
+                    <div className="text-rose-400 font-medium">
+                      Risk Factor: {task.aiRisk.riskFactors.join(', ')}
                     </div>
-                    <div className="text-[11px] text-muted font-mono">
-                      {format(new Date(item.createdAt), 'MMM d, yyyy • h:mm a')}
-                    </div>
-                  </div>
-                ))}
-
-                {(!task.history || task.history.length === 0) && (
-                  <p className="text-xs text-muted italic text-center py-6">No audit trail events recorded yet.</p>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Right Sidebar Metadata (1/3) */}
