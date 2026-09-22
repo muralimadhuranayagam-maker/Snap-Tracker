@@ -30,7 +30,8 @@ import {
   Video,
   Image as ImageIcon,
   Download,
-  UserCheck
+  UserCheck,
+  Mail
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -372,63 +373,119 @@ export function TaskDetailsPage() {
               <span>Request Approval</span>
             </button>
           </div>
-        </div>
-
-        {/* Task Under Review Banner with Prominent Performer Highlight & Actions */}
+        </div>        {/* Task Under Review Banner with Prominent Performer Highlight & Actions */}
         {currentStatusKey === 'IN_REVIEW' && (
-          <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-surface border-2 border-amber-500/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5">
-            <div className="flex items-center gap-4">
-              <div className="relative shrink-0">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-600 text-white font-black text-xl flex items-center justify-center shadow-lg ring-2 ring-amber-400/50">
+          <div className="task-review-banner-container">
+            {/* Left Section: Big Avatar + User Information */}
+            <div className="task-review-left-section">
+              <div className="relative shrink-0" style={{ width: '64px', height: '64px' }}>
+                <div className="task-review-avatar">
                   {performer?.avatar ? (
-                    <img src={performer.avatar} alt="" className="w-full h-full rounded-2xl object-cover" />
+                    <img src={performer.avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: '16px', objectFit: 'cover' }} />
                   ) : (
                     (performer?.name || 'U').charAt(0).toUpperCase()
                   )}
                 </div>
-                <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-surface rounded-full shadow-sm" title="Active Assignee" />
+                <span 
+                  style={{
+                    position: 'absolute',
+                    bottom: '-4px',
+                    right: '-4px',
+                    width: '16px',
+                    height: '16px',
+                    backgroundColor: '#22c55e',
+                    border: '3px solid var(--bg-surface)',
+                    borderRadius: '50%',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                  }} 
+                  title="Active Assignee & Deliverer" 
+                />
               </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/25 text-amber-300 border border-amber-500/40">
+
+              <div className="task-review-content">
+                {/* Badges Row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '2px' }}>
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    padding: '3px 10px',
+                    borderRadius: '6px',
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    color: '#d97706',
+                    border: '1px solid rgba(245, 158, 11, 0.35)'
+                  }}>
                     Needs Super Admin Review & Approval
                   </span>
                   {task.department && (
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold font-mono bg-surface border border-subtle text-amber-200">
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      padding: '3px 10px',
+                      borderRadius: '6px',
+                      background: 'var(--bg-elevated)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-default)',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
                       {task.department.code || task.department.name}
                     </span>
                   )}
                 </div>
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-xs text-amber-200/90 font-medium">Task Completed & Submitted By:</span>
-                  <span className="text-xl sm:text-2xl font-black text-white tracking-tight underline decoration-amber-400/50 underline-offset-4">
-                    {performer?.name || 'Assigned Employee'}
-                  </span>
+
+                {/* Sub-label */}
+                <div className="task-review-sub-label">
+                  Task Completed & Submitted By:
                 </div>
-                {(performer?.email || task.department?.name) && (
-                  <p className="text-xs text-amber-200/70 flex items-center gap-2 flex-wrap">
-                    {performer?.email && <span>{performer.email}</span>}
-                    {task.department?.name && <span>• {task.department.name}</span>}
-                    {latestReviewComment?.createdAt && (
-                      <span>• Submitted {format(new Date(latestReviewComment.createdAt), 'MMM d, yyyy • h:mm a')}</span>
-                    )}
-                  </p>
-                )}
+
+                {/* Huge Employee Name */}
+                <div className="task-review-user-name">
+                  {performer?.name || 'Assigned Employee'}
+                </div>
+
+                {/* Details & Metadata Row */}
+                <div className="task-review-meta">
+                  {performer?.email && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                      <Mail size={13} style={{ opacity: 0.7 }} />
+                      {performer.email}
+                    </span>
+                  )}
+                  {task.department?.name && (
+                    <span>• {task.department.name}</span>
+                  )}
+                  {latestReviewComment?.createdAt && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                      • Submitted {format(new Date(latestReviewComment.createdAt), 'MMM d, yyyy • h:mm a')}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
+            {/* Right Section: Action Buttons - Always Right-Aligned */}
             {isAdminOrSuper && (
-              <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
+              <div className="task-review-actions-section">
                 <button
                   onClick={handleApproveTask}
                   disabled={isApproving}
-                  className="btn btn-approve-solid flex items-center gap-2 text-sm font-bold px-6 py-3 rounded-xl cursor-pointer transition-transform active:scale-95"
+                  className="btn btn-approve-solid"
                   style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '14px',
+                    fontWeight: 800,
+                    padding: '12px 26px',
+                    borderRadius: '12px',
                     backgroundColor: '#16a34a',
                     color: '#ffffff',
                     border: '1px solid #15803d',
-                    fontWeight: 800,
-                    boxShadow: '0 4px 16px rgba(22, 163, 74, 0.45)',
+                    boxShadow: '0 4px 16px rgba(22, 163, 74, 0.4)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    whiteSpace: 'nowrap'
                   }}
                 >
                   <CheckCircle2 size={18} />
@@ -436,13 +493,22 @@ export function TaskDetailsPage() {
                 </button>
                 <button
                   onClick={() => setIsRejectModalOpen(true)}
-                  className="btn btn-reject-solid flex items-center gap-2 text-sm font-bold px-6 py-3 rounded-xl cursor-pointer transition-transform active:scale-95"
+                  className="btn btn-reject-solid"
                   style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '14px',
+                    fontWeight: 800,
+                    padding: '12px 26px',
+                    borderRadius: '12px',
                     backgroundColor: '#dc2626',
                     color: '#ffffff',
                     border: '1px solid #b91c1c',
-                    fontWeight: 800,
-                    boxShadow: '0 4px 16px rgba(220, 38, 38, 0.45)',
+                    boxShadow: '0 4px 16px rgba(220, 38, 38, 0.4)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    whiteSpace: 'nowrap'
                   }}
                 >
                   <XCircle size={18} />
@@ -457,7 +523,7 @@ export function TaskDetailsPage() {
         <div className="space-y-4 pt-1">
           {/* Breadcrumb & Project Tag */}
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="font-mono text-xs sm:text-sm font-black text-blue-400 bg-blue-500/15 px-3 py-1 rounded-lg border border-blue-500/30 tracking-wider">
+            <span className="font-mono text-xs sm:text-sm font-black text-blue bg-accent-subtle px-3 py-1 rounded-lg border border-subtle tracking-wider">
               {task.taskId}
             </span>
 
@@ -467,7 +533,7 @@ export function TaskDetailsPage() {
                 onClick={() => navigate(`/projects/${task.project.id}`)}
                 title="Click to view project details"
               >
-                <FolderKanban size={13} className="badge-project-icon text-blue-400" />
+                <FolderKanban size={13} className="badge-project-icon text-blue" />
                 <span className="badge-project-label">Project:</span>
                 <span className="badge-project-name font-bold">{task.project.name}</span>
                 <ArrowRight size={12} className="badge-project-arrow" />
@@ -487,50 +553,115 @@ export function TaskDetailsPage() {
           </div>
 
           {/* LARGE HIGHLIGHTED TASK TITLE */}
-          <div className="space-y-1">
-            <span className="text-[11px] font-extrabold uppercase tracking-widest text-blue-400">
+          <div style={{ marginTop: '12px', marginBottom: '8px' }}>
+            <span style={{ 
+              fontSize: '12px', 
+              fontWeight: 800, 
+              textTransform: 'uppercase', 
+              letterSpacing: '0.08em', 
+              color: 'var(--blue)',
+              display: 'block',
+              marginBottom: '4px'
+            }}>
               Task Deliverable
             </span>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight drop-shadow-sm">
+            <h1 className="task-large-heading">
               {task.title}
             </h1>
           </div>
 
           {/* HIGH-VISIBILITY EMPLOYEE ATTRIBUTION SHOWCASE CARD */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-surface to-surface border border-blue-500/30 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="relative shrink-0">
-                <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white font-black text-xl flex items-center justify-center shadow-lg ring-2 ring-blue-400/40">
+          <div className="task-executed-showcase">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: '1 1 auto', minWidth: '260px' }}>
+              <div className="relative shrink-0" style={{ width: '56px', height: '56px' }}>
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
+                  color: '#ffffff',
+                  fontWeight: 900,
+                  fontSize: '22px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                  border: '2px solid rgba(255, 255, 255, 0.15)',
+                  flexShrink: 0
+                }}>
                   {performer?.avatar ? (
-                    <img src={performer.avatar} alt="" className="w-full h-full rounded-2xl object-cover" />
+                    <img src={performer.avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: '14px', objectFit: 'cover' }} />
                   ) : (
                     (performer?.name || 'U').charAt(0).toUpperCase()
                   )}
                 </div>
-                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-surface rounded-full shadow-sm" />
+                <span style={{
+                  position: 'absolute',
+                  bottom: '-3px',
+                  right: '-3px',
+                  width: '14px',
+                  height: '14px',
+                  backgroundColor: '#22c55e',
+                  border: '2px solid var(--bg-surface)',
+                  borderRadius: '50%'
+                }} />
               </div>
-              <div className="space-y-1">
-                <div className="text-[11px] font-extrabold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
-                  <UserCheck size={14} className="text-blue-400" />
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ 
+                  fontSize: '11px', 
+                  fontWeight: 800, 
+                  textTransform: 'uppercase', 
+                  letterSpacing: '0.06em', 
+                  color: 'var(--blue)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <UserCheck size={13} style={{ color: 'var(--blue)' }} />
                   <span>Task Executed & Handled By</span>
                 </div>
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span style={{
+                    fontSize: '24px',
+                    fontWeight: 900,
+                    color: 'var(--text-primary)',
+                    lineHeight: 1.2
+                  }}>
                     {performer?.name || 'Unassigned'}
                   </span>
                   {task.department && (
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 font-mono">
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      background: 'var(--blue-subtle)',
+                      color: 'var(--blue)',
+                      border: '1px solid rgba(96, 165, 250, 0.25)',
+                      fontFamily: 'var(--font-mono)'
+                    }}>
                       {task.department.code || task.department.name}
                     </span>
                   )}
                   {task.assignee?.id === performer?.id && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      background: 'var(--green-subtle)',
+                      color: 'var(--green)',
+                      border: '1px solid rgba(34, 197, 94, 0.25)'
+                    }}>
                       Assignee & Owner
                     </span>
                   )}
                 </div>
+
                 {performer?.email && (
-                  <div className="text-xs text-muted font-normal">
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                     {performer.email}
                   </div>
                 )}
@@ -538,14 +669,29 @@ export function TaskDetailsPage() {
             </div>
 
             {/* Quick Metrics */}
-            <div className="flex items-center gap-5 pt-2 sm:pt-0 sm:border-l sm:border-subtle sm:pl-5 shrink-0">
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '24px',
+              paddingLeft: '20px',
+              borderLeft: '1px solid var(--border-default)',
+              flexShrink: 0
+            }}>
               <div>
-                <div className="text-[10px] text-muted uppercase font-semibold">Effort Logged</div>
-                <div className="font-mono text-base font-bold text-accent">{totalLoggedHours}h / {estimatedHours || 4}h</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+                  Effort Logged
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '17px', fontWeight: 800, color: 'var(--accent)' }}>
+                  {totalLoggedHours}h / {estimatedHours || 4}h
+                </div>
               </div>
               <div>
-                <div className="text-[10px] text-muted uppercase font-semibold">Priority</div>
-                <div className="text-xs font-bold text-primary uppercase">{task.priority?.name || 'MEDIUM'}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+                  Priority
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase' }}>
+                  {task.priority?.name || 'MEDIUM'}
+                </div>
               </div>
             </div>
           </div>
@@ -815,42 +961,100 @@ export function TaskDetailsPage() {
           <div className="card p-6 bg-surface border border-subtle shadow-sm space-y-3 rounded-2xl">
             <div className="flex items-center justify-between border-b border-subtle/80 pb-3">
               <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
-                <FileText size={15} className="text-blue-400" />
+                <FileText size={15} style={{ color: 'var(--blue)' }} />
                 <span>Deliverable Description</span>
               </div>
               <span className="text-[11px] text-muted font-mono">{task.taskId}</span>
             </div>
-            <div className="p-4 rounded-xl bg-elevated/40 border border-subtle/80 text-sm text-primary leading-relaxed whitespace-pre-wrap min-h-[60px]">
+            <div style={{
+              padding: '16px 20px',
+              borderRadius: '12px',
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-default)',
+              fontSize: '14px',
+              color: 'var(--text-primary)',
+              lineHeight: 1.6,
+              whiteSpace: 'pre-wrap',
+              minHeight: '60px'
+            }}>
               {task.description ? (
                 task.description
               ) : (
-                <span className="text-muted italic">No detailed description provided for this deliverable.</span>
+                <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>No detailed description provided for this deliverable.</span>
               )}
             </div>
           </div>
 
           {/* Review Submission Comment & Notes */}
           {latestReviewComment && (
-            <div className="card p-6 bg-amber-500/5 border border-amber-500/30 shadow-sm space-y-3.5 rounded-2xl border-l-4 border-l-amber-500">
-              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-amber-500/20 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm shrink-0 border border-amber-500/30">
-                    <ShieldCheck size={18} />
+            <div style={{
+              padding: '20px 24px',
+              borderRadius: '16px',
+              background: 'var(--bg-surface)',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              borderLeft: '5px solid #f59e0b',
+              boxShadow: 'var(--shadow-sm)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+                borderBottom: '1px solid var(--border-subtle)',
+                paddingBottom: '10px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    color: '#d97706',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    <ShieldCheck size={20} />
                   </div>
                   <div>
-                    <div className="text-xs font-bold text-amber-300 flex items-center gap-2">
-                      <span>User Review Submission Note</span>
-                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        User Review Submission Note
+                      </span>
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        background: 'rgba(245, 158, 11, 0.15)',
+                        color: '#d97706',
+                        border: '1px solid rgba(245, 158, 11, 0.3)'
+                      }}>
                         By {latestReviewComment.user?.name || performer?.name || 'Assignee'}
                       </span>
                     </div>
-                    <div className="text-[11px] text-muted">
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
                       {format(new Date(latestReviewComment.createdAt), 'MMMM d, yyyy • h:mm a')}
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="p-4 rounded-xl bg-surface border border-subtle text-sm text-primary leading-relaxed whitespace-pre-wrap font-medium shadow-inner">
+              <div style={{
+                padding: '16px 20px',
+                borderRadius: '12px',
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-default)',
+                fontSize: '14px',
+                color: 'var(--text-primary)',
+                lineHeight: 1.6,
+                fontWeight: 500,
+                whiteSpace: 'pre-wrap'
+              }}>
                 {latestReviewComment.content.replace('**[SUBMITTED FOR REVIEW]**', '').trim()}
               </div>
             </div>
@@ -861,7 +1065,7 @@ export function TaskDetailsPage() {
               <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
-                    <Paperclip size={14} className="text-amber-400" />
+                    <Paperclip size={14} style={{ color: 'var(--amber)' }} />
                     <span>Review Verification Files & Attachments ({task.attachments.length})</span>
                   </div>
                   <span className="text-[11px] text-muted">Inspect uploaded proof</span>
@@ -880,10 +1084,10 @@ export function TaskDetailsPage() {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 truncate">
-                            {isImg && <ImageIcon size={16} className="text-blue-400 shrink-0" />}
-                            {isAudio && <Music size={16} className="text-purple-400 shrink-0" />}
-                            {isVid && <Video size={16} className="text-amber-400 shrink-0" />}
-                            {!isImg && !isAudio && !isVid && <FileText size={16} className="text-emerald-400 shrink-0" />}
+                            {isImg && <ImageIcon size={16} className="text-blue shrink-0" />}
+                            {isAudio && <Music size={16} className="text-purple shrink-0" />}
+                            {isVid && <Video size={16} className="text-amber shrink-0" />}
+                            {!isImg && !isAudio && !isVid && <FileText size={16} className="text-green shrink-0" />}
                             <span className="text-xs font-medium text-primary truncate max-w-[200px]" title={att.originalName}>
                               {att.originalName}
                             </span>
@@ -934,7 +1138,7 @@ export function TaskDetailsPage() {
             <div className="card p-6 bg-surface border border-subtle shadow-sm space-y-4 rounded-2xl">
               <div className="flex items-center justify-between border-b border-subtle/80 pb-3">
                 <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
-                  <MessageSquare size={15} className="text-blue-400" />
+                  <MessageSquare size={15} style={{ color: 'var(--blue)' }} />
                   <span>Comments & Discussion ({comments.length})</span>
                 </div>
                 <span className="text-[11px] text-muted">Direct activity & feedback</span>
@@ -943,15 +1147,41 @@ export function TaskDetailsPage() {
               {/* Inline Comment Input */}
               <div className="space-y-2.5">
                 <textarea
-                  className="w-full text-xs sm:text-sm bg-elevated/50 text-primary p-3.5 rounded-xl border border-subtle focus:border-accent focus:outline-none transition-all placeholder:text-muted resize-none min-h-[85px] leading-relaxed"
+                  style={{
+                    width: '100%',
+                    fontSize: '14px',
+                    background: 'var(--bg-elevated)',
+                    color: 'var(--text-primary)',
+                    padding: '14px 16px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-default)',
+                    outline: 'none',
+                    resize: 'none',
+                    minHeight: '85px',
+                    lineHeight: 1.5,
+                    boxSizing: 'border-box'
+                  }}
                   placeholder="Add a progress update, ask a question, or leave feedback directly on this task..."
                   value={newComment}
                   onChange={e => setNewComment(e.target.value)}
                 />
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <span className="text-[11px] text-muted">AI engine automatically scans comments for blockers</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    AI engine automatically scans comments for blockers
+                  </span>
                   <button
-                    className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm text-xs font-semibold px-4 py-2 rounded-xl cursor-pointer ml-auto"
+                    className="btn btn-primary btn-sm"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '13px',
+                      fontWeight: 700,
+                      padding: '8px 18px',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      marginLeft: 'auto'
+                    }}
                     disabled={!newComment.trim() || postCommentMutation.isPending}
                     onClick={() => postCommentMutation.mutate(newComment)}
                   >

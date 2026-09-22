@@ -2138,4 +2138,111 @@ tbody tr:last-child td { border-bottom: none; }
   transition: transform 0.15s;
 }
 
+/* ─── Task Details & Review Banner Enhancements ───────────────────────── */
+.task-review-banner-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 24px 28px;
+  border-radius: 18px;
+  background: var(--bg-surface);
+  border: 2px solid rgba(245, 158, 11, 0.35);
+  border-left: 6px solid #f59e0b;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.task-review-left-section {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1 1 500px;
+  min-width: 280px;
+}
+
+.task-review-avatar {
+  width: 64px;
+  height: 64px;
+  min-width: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #ffffff;
+  font-size: 26px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.task-review-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-review-user-name {
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.task-review-sub-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #d97706;
+}
+
+[data-theme="dark"] .task-review-sub-label {
+  color: #fbbf24;
+}
+
+.task-review-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.task-review-actions-section {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.task-large-heading {
+  font-size: 38px;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  margin-top: 4px;
+}
+
+.task-executed-showcase {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 18px 24px;
+  border-radius: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-sm);
+}
+
+
 
