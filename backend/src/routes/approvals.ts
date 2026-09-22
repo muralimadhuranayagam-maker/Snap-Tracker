@@ -201,27 +201,81 @@ router.patch('/:id/decision', requireAdminOrAbove, async (req, res, next) => {
       }
     });
 
-    // If linked to a task and approved, transition task if task completion
-    if (existing.taskId && decision === 'APPROVED' && existing.type === 'TASK_COMPLETION') {
-      const doneStatus = await prisma.taskStatus.findFirst({ where: { name: 'DONE' } });
-      if (doneStatus) {
-        await prisma.task.update({
-          where: { id: existing.taskId },
+    // If linked to a task and decided, transition task if task completion
+    if (existing.taskId && existing.type === 'TASK_COMPLETION') {
+      if (decision === 'APPROVED') {
+        const doneStatus = await prisma.taskStatus.findFirst({ where: { name: 'DONE' } });
+        if (doneStatus) {
+          await prisma.task.update({
+            where: { id: existing.taskId },
+            data: {
+              statusId: doneStatus.id,
+              completedAt: new Date()
+            }
+          });
+          await prisma.taskHistory.create({
+            data: {
+              taskId: existing.taskId,
+              userId: user.id,
+              action: 'STATUS_CHANGED',
+              field: 'status',
+              oldValue: 'IN_REVIEW',
+              newValue: 'DONE',
+            }
+          });
+        }
+      } else if (decision === 'REJECTED') {
+        const inProgressStatus = await prisma.taskStatus.findFirst({ where: { name: 'IN_PROGRESS' } });
+        if (inProgressStatus) {
+          await prisma.task.update({
+            where: { id: existing.taskId },
+            data: {
+              statusId: inProgressStatus.id,
+            }
+          });
+          await prisma.taskHistory.create({
+            data: {
+              taskId: existing.taskId,
+              userId: user.id,
+              action: 'STATUS_CHANGED',
+              field: 'status',
+              oldValue: 'IN_REVIEW',
+              newValue: 'IN_PROGRESS',
+            }
+          });
+        }
+
+        // Post system comment explaining rejection reason
+        await prisma.taskComment.create({
           data: {
-            statusId: doneStatus.id,
-            completedAt: new Date()
+            taskId: existing.taskId,
+            userId: user.id,
+            content: `[REVIEW REJECTED by ${user.name}] Reason: ${notes || 'No reason provided'}. Task returned to In Progress.`,
           }
         });
+
+        // If assignee exists and differs from requester, notify them too
+        if (existing.task && (existing.task as any).assigneeId && (existing.task as any).assigneeId !== existing.requesterId) {
+          await createNotification({
+            userId: (existing.task as any).assigneeId,
+            taskId: existing.taskId,
+            type: 'TASK_REJECTED',
+            title: `Task Review Rejected: ${existing.task.title}`,
+            message: `Task returned to In Progress by ${user.name}: "${notes || 'No reason provided'}"`,
+            actionUrl: `/tasks/${existing.taskId}`
+          });
+        }
       }
     }
 
     // Notify requester
     await createNotification({
       userId: existing.requesterId,
+      taskId: existing.taskId || undefined,
       type: decision === 'APPROVED' ? 'TASK_APPROVED' : 'TASK_REJECTED',
       title: `Approval ${decision}: ${existing.title}`,
       message: `Your request was ${decision.toLowerCase()} by ${user.name}. ${notes ? `Note: "${notes}"` : ''}`,
-      actionUrl: '/approvals'
+      actionUrl: existing.taskId ? `/tasks/${existing.taskId}` : '/approvals'
     });
 
     // Audit log
@@ -237,8 +291,9 @@ router.patch('/:id/decision', requireAdminOrAbove, async (req, res, next) => {
     });
 
     broadcast({ type: WSEventTypes.APPROVAL_DECIDED, payload: updated });
-    if (existing.taskId && decision === 'APPROVED' && existing.type === 'TASK_COMPLETION') {
-      broadcast({ type: WSEventTypes.TASK_STATUS_CHANGED, payload: { taskId: existing.task?.taskId, id: existing.taskId, newStatus: 'DONE' } });
+    if (existing.taskId && existing.type === 'TASK_COMPLETION') {
+      const targetStatusName = decision === 'APPROVED' ? 'DONE' : 'IN_PROGRESS';
+      broadcast({ type: WSEventTypes.TASK_STATUS_CHANGED, payload: { taskId: existing.task?.taskId, id: existing.taskId, newStatus: targetStatusName } });
       broadcast({ type: WSEventTypes.TASK_UPDATED, payload: { id: existing.taskId } });
       broadcast({ type: WSEventTypes.WORKLOAD_UPDATED, payload: { taskId: existing.taskId } });
     }

@@ -166,13 +166,13 @@ async function main() {
   // ─── TASK STATUSES ───────────────────────────────────────────────────────
   const statusesList = [
     { name: 'BACKLOG', category: 'PENDING', color: '#94a3b8', icon: 'inbox', order: 0, isSystem: true },
-    { name: 'TODO', category: 'PENDING', color: '#3b82f6', icon: 'circle', order: 1, isSystem: true },
-    { name: 'IN_PROGRESS', category: 'ACTIVE', color: '#6366f1', icon: 'play-circle', order: 2, isSystem: true },
-    { name: 'BLOCKED', category: 'ACTIVE', color: '#ef4444', icon: 'x-circle', order: 3, isSystem: true },
-    { name: 'IN_REVIEW', category: 'REVIEW', color: '#f59e0b', icon: 'eye', order: 4, isSystem: true },
-    { name: 'APPROVED', category: 'REVIEW', color: '#10b981', icon: 'check-circle', order: 5, isSystem: true },
-    { name: 'DONE', category: 'DONE', color: '#22c55e', icon: 'check-circle-2', order: 6, isSystem: true, isTerminal: true },
-    { name: 'CANCELLED', category: 'CANCELLED', color: '#6b7280', icon: 'ban', order: 7, isSystem: true, isTerminal: true },
+    { name: 'IN_PROGRESS', category: 'ACTIVE', color: '#6366f1', icon: 'play-circle', order: 1, isSystem: true },
+    { name: 'BLOCKED', category: 'ACTIVE', color: '#ef4444', icon: 'x-circle', order: 2, isSystem: true },
+    { name: 'IN_REVIEW', category: 'REVIEW', color: '#f59e0b', icon: 'eye', order: 3, isSystem: true },
+    { name: 'DONE', category: 'DONE', color: '#22c55e', icon: 'check-circle-2', order: 4, isSystem: true, isTerminal: true },
+    { name: 'TODO', category: 'PENDING', color: '#3b82f6', icon: 'circle', order: 10, isSystem: true },
+    { name: 'APPROVED', category: 'REVIEW', color: '#10b981', icon: 'check-circle', order: 11, isSystem: true },
+    { name: 'CANCELLED', category: 'CANCELLED', color: '#6b7280', icon: 'ban', order: 12, isSystem: true, isTerminal: true },
   ];
 
   const statuses: Record<string, any> = {};
@@ -180,7 +180,7 @@ async function main() {
     const status = await prisma.taskStatus.upsert({
       where: { name: s.name },
       create: s,
-      update: {},
+      update: { order: s.order },
     });
     statuses[s.name] = status;
   }

@@ -118,6 +118,38 @@ export async function notifyReviewRequested(taskId: string, reviewerId: string, 
   });
 }
 
+export async function notifySuperAdminsReviewRequested(taskId: string, requesterName: string, commentPreview?: string) {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: { taskId: true, title: true, reviewerId: true }
+  });
+  if (!task) return;
+
+  const superAdmins = await prisma.user.findMany({
+    where: {
+      role: { name: 'SUPER_ADMIN' },
+      isActive: true,
+    },
+    select: { id: true }
+  });
+
+  const recipientIds = new Set<string>(superAdmins.map(sa => sa.id));
+  if (task.reviewerId) recipientIds.add(task.reviewerId);
+
+  const preview = commentPreview ? ` Note: "${commentPreview.slice(0, 100)}"` : '';
+
+  for (const adminId of recipientIds) {
+    await createNotification({
+      userId: adminId,
+      taskId,
+      type: 'REVIEW_REQUESTED',
+      title: 'Task Review Submitted',
+      message: `${requesterName} submitted "${task.title}" (${task.taskId}) for review.${preview}`,
+      actionUrl: `/tasks/${taskId}`,
+    });
+  }
+}
+
 // Run escalation checks (called by a periodic job)
 export async function runEscalationChecks() {
   const now = new Date();

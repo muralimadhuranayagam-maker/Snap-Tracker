@@ -23,6 +23,7 @@ import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
 import { RaiseTicketModal } from '../components/tickets/RaiseTicketModal';
+import { SubmitForReviewModal } from '../components/tasks/SubmitForReviewModal';
 
 export function TasksPage() {
   const { user } = useAuthStore();
@@ -37,6 +38,7 @@ export function TasksPage() {
   const [priorityFilter, setPriorityFilter] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isRaiseTicketModalOpen, setIsRaiseTicketModalOpen] = useState(false);
+  const [reviewModalTask, setReviewModalTask] = useState<any | null>(null);
 
   // Fetch Tasks with scope
   const { data: rawTasks = [], isLoading } = useQuery({
@@ -70,24 +72,23 @@ export function TasksPage() {
     return matchesSearch && matchesPriority;
   });
 
-  // Column Configuration with Dot Colors and Display Labels
+  // Column Configuration with Dot Colors and Display Labels (5 strict columns)
   const COLUMN_CONFIG: Record<string, { label: string; dotColor: string }> = {
-    BACKLOG: { label: 'BACKLOG', dotColor: '#94a3b8' },      // Slate Gray
-    TODO: { label: 'TODO', dotColor: '#3b82f6' },         // Blue
+    BACKLOG: { label: 'BACKLOG', dotColor: '#94a3b8' },         // Slate Gray
     IN_PROGRESS: { label: 'IN PROGRESS', dotColor: '#eab308' }, // Yellow / Amber
-    IN_REVIEW: { label: 'IN REVIEW', dotColor: '#f97316' },   // Orange
-    BLOCKED: { label: 'BLOCKED', dotColor: '#ef4444' },     // Red / Blocker
-    DONE: { label: 'COMPLETED', dotColor: '#22c55e' },      // Green / Completed
+    BLOCKED: { label: 'BLOCKED', dotColor: '#ef4444' },         // Red / Blocker
+    IN_REVIEW: { label: 'IN REVIEW', dotColor: '#f97316' },     // Orange
+    DONE: { label: 'COMPLETED', dotColor: '#22c55e' },          // Green / Completed
   };
 
-  // Kanban Columns
-  const kanbanColumns = ['BACKLOG', 'TODO', 'IN_PROGRESS', 'IN_REVIEW', 'BLOCKED', 'DONE'];
+  // Kanban Columns: 1. Backlogs, 2. Inprogress, 3. Blocked, 4. Inreview, 5. Completed
+  const kanbanColumns = ['BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'IN_REVIEW', 'DONE'];
   const groupedTasks = kanbanColumns.reduce((acc, status) => {
     acc[status] = filteredTasks.filter((t: any) => t.status?.name === status);
     return acc;
   }, {} as Record<string, any[]>);
 
-  // Drag and drop handler with correct PATCH endpoint and query invalidation
+  // Drag and drop handler with workflow restrictions
   const handleDragEnd = async (result: DropResult) => {
     if (!result.destination) return;
     
@@ -97,6 +98,26 @@ export function TasksPage() {
     if (sourceStatus === destStatus) return;
 
     const taskId = result.draggableId;
+    const taskObj = rawTasks.find((t: any) => t.id === taskId);
+
+    // Rule 1: Dragging to IN_REVIEW opens the Review Submission Modal
+    if (destStatus === 'IN_REVIEW') {
+      setReviewModalTask(taskObj || { id: taskId, taskId, title: 'Task' });
+      return;
+    }
+
+    // Rule 2: Non-admins cannot drag directly to COMPLETED (DONE)
+    if (destStatus === 'DONE' && !isAdminOrSuper) {
+      toast.error('Tasks cannot be moved directly to Completed. Submit for review for Super Admin approval.');
+      return;
+    }
+
+    // Rule 3: Non-admins cannot drag tasks out of IN_REVIEW
+    if (sourceStatus === 'IN_REVIEW' && !isAdminOrSuper) {
+      toast.error('Tasks in review can only be approved or rejected by a Super Admin.');
+      return;
+    }
+
     try {
       const statusObj = statuses.find((s: any) => s.name === destStatus);
       if (!statusObj) {
@@ -433,6 +454,13 @@ export function TasksPage() {
       <RaiseTicketModal
         isOpen={isRaiseTicketModalOpen}
         onClose={() => setIsRaiseTicketModalOpen(false)}
+      />
+
+      {/* Submit For Review Modal */}
+      <SubmitForReviewModal
+        isOpen={!!reviewModalTask}
+        task={reviewModalTask}
+        onClose={() => setReviewModalTask(null)}
       />
     </div>
   );

@@ -1,37 +1,73 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../lib/prisma';
 import { authenticate, requireAdminOrAbove } from '../middleware/auth';
 import { createAuditLog, AuditActions } from '../services/audit';
 import { AppError } from '../middleware/errorHandler';
-import { createNotification, notifyTaskAssigned, notifyReviewRequested } from '../services/notifications';
+import { createNotification, notifyTaskAssigned, notifyReviewRequested, notifySuperAdminsReviewRequested } from '../services/notifications';
 import { broadcast, WSEventTypes } from '../services/websocket';
 import { detectBlockersFromText, predictDeadlineRisk, calculateTaskPriorityScore } from '../services/ai';
 
 const router = Router();
 router.use(authenticate);
 
+// Ensure upload directory exists for task review file attachments
+const uploadDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const diskStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (_req, file, cb) => {
+    let ext = path.extname(file.originalname);
+    if (!ext) {
+      if (file.mimetype.startsWith('audio/webm')) ext = '.webm';
+      else if (file.mimetype.startsWith('audio/wav')) ext = '.wav';
+      else if (file.mimetype.startsWith('audio/mp3') || file.mimetype.startsWith('audio/mpeg')) ext = '.mp3';
+      else if (file.mimetype.startsWith('video/mp4')) ext = '.mp4';
+      else if (file.mimetype.startsWith('image/png')) ext = '.png';
+      else if (file.mimetype.startsWith('image/jpeg')) ext = '.jpg';
+      else ext = '.bin';
+    }
+    cb(null, `${uuidv4()}${ext}`);
+  },
+});
+
+const taskUpload = multer({
+  storage: diskStorage,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+});
+
 // ─── Valid state transitions (state machine) ──────────────────────────────────
-const EMPLOYEE_ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  BACKLOG: ['TODO'],
-  TODO: ['IN_PROGRESS'],
-  IN_PROGRESS: ['BLOCKED', 'IN_REVIEW'],
-  BLOCKED: ['IN_PROGRESS'],
-  IN_REVIEW: ['IN_PROGRESS'], // can send back to WIP
-};
+function validateTransition(currentStatus: string, newStatus: string, roleName: string): { allowed: boolean; reason?: string } {
+  if (currentStatus === newStatus) return { allowed: true };
+  const isSuperAdmin = roleName === 'SUPER_ADMIN';
+  const isAdmin = roleName === 'ADMIN';
 
-const ADMIN_ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  BACKLOG: ['TODO', 'CANCELLED'],
-  TODO: ['IN_PROGRESS', 'BACKLOG', 'CANCELLED'],
-  IN_PROGRESS: ['BLOCKED', 'IN_REVIEW', 'TODO', 'CANCELLED'],
-  BLOCKED: ['IN_PROGRESS', 'CANCELLED'],
-  IN_REVIEW: ['APPROVED', 'IN_PROGRESS', 'CANCELLED'],
-  APPROVED: ['DONE', 'IN_REVIEW'],
-  DONE: ['IN_PROGRESS'], // reopen
-};
+  // Strict rule: Only Super Admin / Admin can mark as DONE (Completed)
+  if (newStatus === 'DONE') {
+    if (!isSuperAdmin && !isAdmin) {
+      return {
+        allowed: false,
+        reason: 'Tasks cannot be moved directly to Completed. They must be submitted for review and approved by a Super Admin.'
+      };
+    }
+  }
 
-function validateTransition(_currentStatus: string, _newStatus: string, _roleName: string): boolean {
-  return true; // Allow any task status transition across Kanban workflow
+  // Strict rule: Only Super Admin / Admin can move tasks out of IN_REVIEW
+  if (currentStatus === 'IN_REVIEW') {
+    if (!isSuperAdmin && !isAdmin) {
+      return {
+        allowed: false,
+        reason: 'Tasks in review can only be approved or rejected by a Super Admin.'
+      };
+    }
+  }
+
+  return { allowed: true };
 }
 
 // Generate human-readable task ID (e.g. FDE-1024)
@@ -462,12 +498,95 @@ router.patch('/:id', async (req, res, next) => {
       const newStatus = await prisma.taskStatus.findUnique({ where: { id: statusId } });
       if (!newStatus) throw new AppError('Invalid status', 400);
 
-      if (newStatus.name === 'DONE') {
-        updateData.completedAt = new Date();
+      const currentStatusName = task.status?.name || 'BACKLOG';
+      const validation = validateTransition(currentStatusName, newStatus.name, user.roleName);
+      if (!validation.allowed) {
+        throw new AppError(validation.reason || 'Invalid status transition', 403);
       }
 
-      if (newStatus.name === 'IN_REVIEW' && task.reviewerId) {
-        await notifyReviewRequested(task.id, task.reviewerId, user.name);
+      if (newStatus.name === 'DONE') {
+        updateData.completedAt = new Date();
+
+        // Mark any pending TASK_COMPLETION approval as APPROVED
+        const pendingApproval = await prisma.approval.findFirst({
+          where: { taskId: task.id, type: 'TASK_COMPLETION', status: 'PENDING' }
+        });
+        if (pendingApproval) {
+          await prisma.approval.update({
+            where: { id: pendingApproval.id },
+            data: {
+              status: 'APPROVED',
+              approverId: user.id,
+              decisionAt: new Date(),
+              notes: req.body.notes || 'Approved directly',
+            }
+          });
+        }
+      }
+
+      // If rejecting from IN_REVIEW -> IN_PROGRESS by Admin/Super Admin
+      if (currentStatusName === 'IN_REVIEW' && newStatus.name === 'IN_PROGRESS') {
+        const rejectionReason = req.body.rejectionReason || req.body.notes || 'Returned to In Progress';
+        await prisma.taskComment.create({
+          data: {
+            taskId: task.id,
+            userId: user.id,
+            content: `[REVIEW REJECTED by ${user.name}] Reason: ${rejectionReason}. Task returned to In Progress.`,
+          }
+        });
+
+        const pendingApproval = await prisma.approval.findFirst({
+          where: { taskId: task.id, type: 'TASK_COMPLETION', status: 'PENDING' }
+        });
+        if (pendingApproval) {
+          await prisma.approval.update({
+            where: { id: pendingApproval.id },
+            data: {
+              status: 'REJECTED',
+              approverId: user.id,
+              decisionAt: new Date(),
+              notes: rejectionReason,
+            }
+          });
+        }
+
+        if (task.assigneeId) {
+          await createNotification({
+            userId: task.assigneeId,
+            taskId: task.id,
+            type: 'TASK_REJECTED',
+            title: `Task Review Rejected: ${task.title}`,
+            message: `Your task was rejected by ${user.name}: "${rejectionReason}". Returned to In Progress.`,
+            actionUrl: `/tasks/${task.id}`,
+          });
+        }
+      }
+
+      if (newStatus.name === 'IN_REVIEW') {
+        await notifySuperAdminsReviewRequested(task.id, user.name, req.body.comment || req.body.description);
+
+        const existingPending = await prisma.approval.findFirst({
+          where: { taskId: task.id, type: 'TASK_COMPLETION', status: 'PENDING' }
+        });
+        if (!existingPending) {
+          const primarySuperAdmin = await prisma.user.findFirst({
+            where: { role: { name: 'SUPER_ADMIN' }, isActive: true },
+            select: { id: true }
+          });
+          await prisma.approval.create({
+            data: {
+              title: `Task Review: ${task.title}`,
+              description: req.body.comment || `Task ${task.taskId} submitted for review by ${user.name}`,
+              type: 'TASK_COMPLETION',
+              requesterId: user.id,
+              approverId: task.reviewerId || primarySuperAdmin?.id || null,
+              taskId: task.id,
+              entityType: 'Task',
+              entityId: task.id,
+              status: 'PENDING'
+            }
+          });
+        }
       }
 
       updateData.statusId = statusId;
@@ -738,6 +857,321 @@ router.post('/bulk', requireAdminOrAbove, async (req, res, next) => {
     broadcast({ type: WSEventTypes.WORKLOAD_UPDATED, payload: { taskIds: results } });
 
     res.json({ updated: results.length, taskIds: results });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/tasks/:id/submit-review — Submit task for review with comments & files
+router.post('/:id/submit-review', taskUpload.array('files', 10), async (req, res, next) => {
+  try {
+    const user = req.user!;
+    const taskId = req.params.id;
+    const commentText = req.body.comment || '';
+    const files = (req.files as Express.Multer.File[]) || [];
+
+    const task = await prisma.task.findFirst({
+      where: { id: taskId, isDeleted: false },
+      include: { status: true, assignee: true, reviewer: true }
+    });
+    if (!task) throw new AppError('Task not found', 404);
+
+    const inReviewStatus = await prisma.taskStatus.findFirst({
+      where: { name: 'IN_REVIEW' }
+    });
+    if (!inReviewStatus) throw new AppError('IN_REVIEW status not configured', 500);
+
+    // Save uploaded files as TaskAttachments
+    const savedAttachments: any[] = [];
+    for (const file of files) {
+      const att = await prisma.taskAttachment.create({
+        data: {
+          taskId: task.id,
+          name: file.filename,
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          size: file.size,
+          url: `/uploads/${file.filename}`,
+          uploadedById: user.id,
+        }
+      });
+      savedAttachments.push(att);
+      await prisma.taskHistory.create({
+        data: {
+          taskId: task.id,
+          userId: user.id,
+          action: 'ATTACHMENT_ADDED',
+          newValue: file.originalname,
+        }
+      });
+    }
+
+    // Format review comment with attachment links
+    let fileSummary = '';
+    if (savedAttachments.length > 0) {
+      fileSummary = '\n\n**Attached Files:**\n' + 
+        savedAttachments.map(a => `- [${a.originalName}](${a.url}) (${(a.size / 1024).toFixed(1)} KB)`).join('\n');
+    }
+
+    const fullCommentContent = `**[SUBMITTED FOR REVIEW]**\n${commentText || 'Task submitted for review.'}${fileSummary}`;
+    const comment = await prisma.taskComment.create({
+      data: {
+        taskId: task.id,
+        userId: user.id,
+        content: fullCommentContent,
+      },
+      include: {
+        user: { select: { id: true, name: true, avatar: true } }
+      }
+    });
+
+    // Update task status to IN_REVIEW
+    const updatedTask = await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        statusId: inReviewStatus.id,
+      },
+      include: TASK_INCLUDE,
+    });
+
+    // Task History
+    await prisma.taskHistory.create({
+      data: {
+        taskId: task.id,
+        userId: user.id,
+        action: 'STATUS_CHANGED',
+        field: 'status',
+        oldValue: task.status?.name || 'UNKNOWN',
+        newValue: 'IN_REVIEW',
+      }
+    });
+
+    // Super Admin recipient
+    const primarySuperAdmin = await prisma.user.findFirst({
+      where: { role: { name: 'SUPER_ADMIN' }, isActive: true },
+      select: { id: true }
+    });
+
+    // Create or update pending Approval record
+    const approval = await prisma.approval.create({
+      data: {
+        title: `Task Review: ${task.title}`,
+        description: commentText || `Task ${task.taskId} submitted for review by ${user.name}`,
+        type: 'TASK_COMPLETION',
+        requesterId: user.id,
+        approverId: task.reviewerId || primarySuperAdmin?.id || null,
+        taskId: task.id,
+        entityType: 'Task',
+        entityId: task.id,
+        status: 'PENDING'
+      },
+      include: {
+        requester: { select: { id: true, name: true, email: true } },
+        approver: { select: { id: true, name: true, email: true } },
+        task: { select: { id: true, taskId: true, title: true } }
+      }
+    });
+
+    // Notify Super Admins
+    await notifySuperAdminsReviewRequested(task.id, user.name, commentText);
+
+    // Audit log
+    await createAuditLog({
+      userId: user.id,
+      userEmail: user.email,
+      action: 'TASK_SUBMITTED_FOR_REVIEW',
+      entity: 'Task',
+      entityId: task.id,
+      newValue: { status: 'IN_REVIEW', comment: commentText, fileCount: files.length },
+      req,
+    });
+
+    // Realtime broadcasts
+    broadcast({
+      type: WSEventTypes.TASK_STATUS_CHANGED,
+      payload: { taskId: task.taskId, id: task.id, oldStatus: task.status?.name, newStatus: 'IN_REVIEW' }
+    });
+    broadcast({ type: WSEventTypes.TASK_UPDATED, payload: { id: task.id } });
+    broadcast({ type: WSEventTypes.APPROVAL_REQUESTED, payload: approval });
+    broadcast({ type: WSEventTypes.TASK_COMMENTED, payload: comment });
+
+    res.json({
+      success: true,
+      task: updatedTask,
+      approval,
+      comment,
+      attachments: savedAttachments,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/tasks/:id/approve — Super Admin approve task to Completed
+router.post('/:id/approve', requireAdminOrAbove, async (req, res, next) => {
+  try {
+    const user = req.user!;
+    const taskId = req.params.id;
+    const notes = req.body.notes || 'Approved as completed';
+
+    const task = await prisma.task.findFirst({
+      where: { id: taskId, isDeleted: false },
+      include: { status: true, assignee: true }
+    });
+    if (!task) throw new AppError('Task not found', 404);
+
+    const doneStatus = await prisma.taskStatus.findFirst({ where: { name: 'DONE' } });
+    if (!doneStatus) throw new AppError('DONE status not found', 500);
+
+    const updatedTask = await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        statusId: doneStatus.id,
+        completedAt: new Date(),
+      },
+      include: TASK_INCLUDE,
+    });
+
+    // Update pending approval
+    const pendingApproval = await prisma.approval.findFirst({
+      where: { taskId: task.id, type: 'TASK_COMPLETION', status: 'PENDING' }
+    });
+    if (pendingApproval) {
+      await prisma.approval.update({
+        where: { id: pendingApproval.id },
+        data: {
+          status: 'APPROVED',
+          approverId: user.id,
+          decisionAt: new Date(),
+          notes,
+        }
+      });
+    }
+
+    // Comment
+    await prisma.taskComment.create({
+      data: {
+        taskId: task.id,
+        userId: user.id,
+        content: `[APPROVED by ${user.name}] Task completed. ${notes ? `Note: ${notes}` : ''}`,
+      }
+    });
+
+    // History
+    await prisma.taskHistory.create({
+      data: {
+        taskId: task.id,
+        userId: user.id,
+        action: 'STATUS_CHANGED',
+        field: 'status',
+        oldValue: task.status?.name || 'IN_REVIEW',
+        newValue: 'DONE',
+      }
+    });
+
+    // Notify assignee
+    if (task.assigneeId) {
+      await createNotification({
+        userId: task.assigneeId,
+        taskId: task.id,
+        type: 'TASK_APPROVED',
+        title: `Task Approved: ${task.title}`,
+        message: `Your task was approved as completed by ${user.name}.`,
+        actionUrl: `/tasks/${task.id}`,
+      });
+    }
+
+    broadcast({ type: WSEventTypes.TASK_STATUS_CHANGED, payload: { taskId: task.taskId, id: task.id, newStatus: 'DONE' } });
+    broadcast({ type: WSEventTypes.TASK_UPDATED, payload: { id: task.id } });
+    broadcast({ type: WSEventTypes.WORKLOAD_UPDATED, payload: { taskId: task.id } });
+
+    res.json(updatedTask);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/tasks/:id/reject — Super Admin reject task back to In Progress
+router.post('/:id/reject', requireAdminOrAbove, async (req, res, next) => {
+  try {
+    const user = req.user!;
+    const taskId = req.params.id;
+    const reason = req.body.reason || req.body.notes;
+
+    if (!reason?.trim()) {
+      throw new AppError('A rejection reason/comment is required when rejecting a task.', 400);
+    }
+
+    const task = await prisma.task.findFirst({
+      where: { id: taskId, isDeleted: false },
+      include: { status: true, assignee: true }
+    });
+    if (!task) throw new AppError('Task not found', 404);
+
+    const inProgressStatus = await prisma.taskStatus.findFirst({ where: { name: 'IN_PROGRESS' } });
+    if (!inProgressStatus) throw new AppError('IN_PROGRESS status not found', 500);
+
+    const updatedTask = await prisma.task.update({
+      where: { id: task.id },
+      data: {
+        statusId: inProgressStatus.id,
+      },
+      include: TASK_INCLUDE,
+    });
+
+    // Update pending approval to REJECTED
+    const pendingApproval = await prisma.approval.findFirst({
+      where: { taskId: task.id, type: 'TASK_COMPLETION', status: 'PENDING' }
+    });
+    if (pendingApproval) {
+      await prisma.approval.update({
+        where: { id: pendingApproval.id },
+        data: {
+          status: 'REJECTED',
+          approverId: user.id,
+          decisionAt: new Date(),
+          notes: reason,
+        }
+      });
+    }
+
+    // Comment explaining rejection
+    await prisma.taskComment.create({
+      data: {
+        taskId: task.id,
+        userId: user.id,
+        content: `[REVIEW REJECTED by ${user.name}] Reason: ${reason}. Task returned to In Progress.`,
+      }
+    });
+
+    // History
+    await prisma.taskHistory.create({
+      data: {
+        taskId: task.id,
+        userId: user.id,
+        action: 'STATUS_CHANGED',
+        field: 'status',
+        oldValue: task.status?.name || 'IN_REVIEW',
+        newValue: 'IN_PROGRESS',
+      }
+    });
+
+    // Notify assignee
+    if (task.assigneeId) {
+      await createNotification({
+        userId: task.assigneeId,
+        taskId: task.id,
+        type: 'TASK_REJECTED',
+        title: `Task Review Rejected: ${task.title}`,
+        message: `Task returned to In Progress by ${user.name}: "${reason}"`,
+        actionUrl: `/tasks/${task.id}`,
+      });
+    }
+
+    broadcast({ type: WSEventTypes.TASK_STATUS_CHANGED, payload: { taskId: task.taskId, id: task.id, newStatus: 'IN_PROGRESS' } });
+    broadcast({ type: WSEventTypes.TASK_UPDATED, payload: { id: task.id } });
+
+    res.json(updatedTask);
   } catch (err) {
     next(err);
   }

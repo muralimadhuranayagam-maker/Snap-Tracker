@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
+import { useAuthStore } from '../store/authStore';
+import { SubmitForReviewModal } from '../components/tasks/SubmitForReviewModal';
 import { 
   ArrowLeft, 
   Clock, 
@@ -21,7 +24,14 @@ import {
   ChevronDown,
   History as HistoryIcon,
   X,
-  Check
+  Check,
+  CheckCircle2,
+  XCircle,
+  Paperclip,
+  Music,
+  Video,
+  Image as ImageIcon,
+  Download
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -37,11 +47,10 @@ interface StatusConfig {
 
 const STATUS_CONFIG: Record<string, StatusConfig> = {
   BACKLOG: { label: 'Backlog', desc: 'Queued for future sprint work', dotColor: '#94a3b8', bgColor: 'rgba(148, 163, 184, 0.1)', textColor: '#94a3b8', borderColor: 'rgba(148, 163, 184, 0.25)' },
-  TODO: { label: 'To Do', desc: 'Ready for active development', dotColor: '#3b82f6', bgColor: 'rgba(59, 130, 246, 0.12)', textColor: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.3)' },
   IN_PROGRESS: { label: 'In Progress', desc: 'Work actively underway', dotColor: '#eab308', bgColor: 'rgba(234, 179, 8, 0.12)', textColor: '#eab308', borderColor: 'rgba(234, 179, 8, 0.3)' },
-  IN_REVIEW: { label: 'In Review', desc: 'Awaiting peer review & QA', dotColor: '#f97316', bgColor: 'rgba(249, 115, 22, 0.12)', textColor: '#f97316', borderColor: 'rgba(249, 115, 22, 0.3)' },
   BLOCKED: { label: 'Blocked', desc: 'Waiting on dependencies or approvals', dotColor: '#ef4444', bgColor: 'rgba(239, 68, 68, 0.12)', textColor: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' },
-  DONE: { label: 'Completed', desc: 'Task finished and verified', dotColor: '#22c55e', bgColor: 'rgba(34, 197, 94, 0.12)', textColor: '#22c55e', borderColor: 'rgba(34, 197, 94, 0.3)' },
+  IN_REVIEW: { label: 'In Review', desc: 'Awaiting Super Admin review & approval', dotColor: '#f97316', bgColor: 'rgba(249, 115, 22, 0.12)', textColor: '#f97316', borderColor: 'rgba(249, 115, 22, 0.3)' },
+  DONE: { label: 'Completed', desc: 'Task verified and approved as complete', dotColor: '#22c55e', bgColor: 'rgba(34, 197, 94, 0.12)', textColor: '#22c55e', borderColor: 'rgba(34, 197, 94, 0.3)' },
 };
 
 interface PriorityConfig {
@@ -64,6 +73,8 @@ export function TaskDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const isAdminOrSuper = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
   const [activeTab, setActiveTab] = useState<'overview' | 'comments' | 'worklogs' | 'dependencies' | 'history'>('overview');
   const [newComment, setNewComment] = useState('');
@@ -77,6 +88,53 @@ export function TaskDetailsPage() {
 
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState(false);
+
+  // Review and Approval Flow States
+  const [isSubmitReviewModalOpen, setIsSubmitReviewModalOpen] = useState(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+
+  const handleApproveTask = async () => {
+    if (!id) return;
+    setIsApproving(true);
+    try {
+      await api.post(`/tasks/${id}/approve`, { notes: 'Approved as completed' });
+      toast.success('Task approved and completed!');
+      queryClient.invalidateQueries({ queryKey: ['task', id] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to approve task');
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handleRejectTask = async () => {
+    if (!id) return;
+    if (!rejectionReason.trim()) {
+      toast.error('Please enter a rejection reason.');
+      return;
+    }
+    setIsRejecting(true);
+    try {
+      await api.post(`/tasks/${id}/reject`, { reason: rejectionReason.trim() });
+      toast.success('Task rejected and returned to In Progress.');
+      setIsRejectModalOpen(false);
+      setRejectionReason('');
+      queryClient.invalidateQueries({ queryKey: ['task', id] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to reject task');
+    } finally {
+      setIsRejecting(false);
+    }
+  };
 
   // Fetch Task Details
   const { data: task, isLoading, error } = useQuery({
@@ -271,7 +329,39 @@ export function TaskDetailsPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+            {/* Submit for Review button: visible when task is in BACKLOG, IN_PROGRESS, or BLOCKED */}
+            {(currentStatusKey === 'IN_PROGRESS' || currentStatusKey === 'BLOCKED' || currentStatusKey === 'BACKLOG') && (
+              <button 
+                className="btn btn-sm flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-all shadow-sm"
+                onClick={() => setIsSubmitReviewModalOpen(true)}
+              >
+                <ShieldCheck size={15} />
+                <span>Submit for Review</span>
+              </button>
+            )}
+
+            {/* In Review Actions: for Super Admin or Admin */}
+            {currentStatusKey === 'IN_REVIEW' && isAdminOrSuper && (
+              <>
+                <button 
+                  className="btn btn-sm flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm disabled:opacity-50"
+                  onClick={handleApproveTask}
+                  disabled={isApproving}
+                >
+                  <CheckCircle2 size={15} />
+                  <span>{isApproving ? 'Approving...' : 'Approve & Complete'}</span>
+                </button>
+                <button 
+                  className="btn btn-sm flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-sm"
+                  onClick={() => setIsRejectModalOpen(true)}
+                >
+                  <XCircle size={15} />
+                  <span>Reject Review</span>
+                </button>
+              </>
+            )}
+
             <button 
               className="btn btn-secondary btn-sm flex items-center gap-2 shadow-xs text-xs font-medium px-3.5 py-2 border border-subtle hover:border-accent/40"
               onClick={() => setIsLogWorkModalOpen(true)}
@@ -292,6 +382,44 @@ export function TaskDetailsPage() {
             </button>
           </div>
         </div>
+
+        {/* Task Under Review Banner */}
+        {currentStatusKey === 'IN_REVIEW' && (
+          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                <ShieldCheck size={22} />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-amber-300">Task Under Review & Verification</h3>
+                <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                  {isAdminOrSuper 
+                    ? 'This task was submitted for completion review. Inspect the uploaded proof files, voice memos, and comments below before deciding.'
+                    : 'Submitted for completion review. Your Super Admin will verify the files and notes before moving this task to Completed.'}
+                </p>
+              </div>
+            </div>
+            {isAdminOrSuper && (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={handleApproveTask}
+                  disabled={isApproving}
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                >
+                  <CheckCircle2 size={14} />
+                  <span>Approve</span>
+                </button>
+                <button
+                  onClick={() => setIsRejectModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                >
+                  <XCircle size={14} />
+                  <span>Reject</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Row 2: Task Title & Badges */}
         <div className="space-y-3 pt-1">
@@ -369,7 +497,9 @@ export function TaskDetailsPage() {
                       </span>
                     </div>
                     <div className="space-y-0.5">
-                      {statuses.map((s: any) => {
+                      {statuses
+                        .filter((s: any) => ['BACKLOG', 'IN_PROGRESS', 'BLOCKED', 'IN_REVIEW', 'DONE'].includes(s.name))
+                        .map((s: any) => {
                         const cfg = STATUS_CONFIG[s.name] || {
                           label: s.name.replace('_', ' '),
                           dotColor: '#94a3b8',
@@ -379,8 +509,25 @@ export function TaskDetailsPage() {
                           <button
                             key={s.id}
                             onClick={() => {
-                              updateStatusMutation.mutate(s.id);
                               setIsStatusDropdownOpen(false);
+                              if (s.name === currentStatusKey) return;
+
+                              if (s.name === 'IN_REVIEW') {
+                                setIsSubmitReviewModalOpen(true);
+                                return;
+                              }
+
+                              if (s.name === 'DONE' && !isAdminOrSuper) {
+                                toast.error('Tasks cannot be moved directly to Completed. Submit for review for Super Admin approval.');
+                                return;
+                              }
+
+                              if (currentStatusKey === 'IN_REVIEW' && !isAdminOrSuper) {
+                                toast.error('Tasks in review can only be approved or rejected by a Super Admin.');
+                                return;
+                              }
+
+                              updateStatusMutation.mutate(s.id);
                             }}
                             className="w-full text-left px-3 py-1.5 text-xs font-semibold flex items-center justify-between transition-all rounded-lg"
                             style={{
@@ -648,6 +795,80 @@ export function TaskDetailsPage() {
                   )}
                 </div>
               </div>
+
+              {/* Uploaded Verification Files & Attachments */}
+              {task.attachments && task.attachments.length > 0 && (
+                <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
+                      <Paperclip size={14} className="text-amber-400" />
+                      <span>Review Verification Files & Attachments ({task.attachments.length})</span>
+                    </div>
+                    <span className="text-[11px] text-muted">Inspect uploaded proof</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    {task.attachments.map((att: any) => {
+                      const isImg = att.mimeType?.startsWith('image/');
+                      const isAudio = att.mimeType?.startsWith('audio/');
+                      const isVid = att.mimeType?.startsWith('video/');
+
+                      return (
+                        <div 
+                          key={att.id}
+                          className="p-3 rounded-xl bg-surface-hover/80 border border-subtle flex flex-col gap-2 transition-all hover:border-amber-500/30"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 truncate">
+                              {isImg && <ImageIcon size={16} className="text-blue-400 shrink-0" />}
+                              {isAudio && <Music size={16} className="text-purple-400 shrink-0" />}
+                              {isVid && <Video size={16} className="text-amber-400 shrink-0" />}
+                              {!isImg && !isAudio && !isVid && <FileText size={16} className="text-emerald-400 shrink-0" />}
+                              <span className="text-xs font-medium text-primary truncate max-w-[200px]" title={att.originalName}>
+                                {att.originalName}
+                              </span>
+                            </div>
+                            <a
+                              href={att.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              download
+                              className="text-muted hover:text-primary p-1 rounded hover:bg-surface transition-colors shrink-0"
+                              title="Download file"
+                            >
+                              <Download size={14} />
+                            </a>
+                          </div>
+
+                          {/* Image preview */}
+                          {isImg && (
+                            <div className="mt-1 rounded-lg overflow-hidden border border-subtle max-h-48 bg-black/20 flex items-center justify-center">
+                              <a href={att.url} target="_blank" rel="noreferrer">
+                                <img src={att.url} alt={att.originalName} className="object-cover w-full h-auto max-h-48 hover:opacity-90 transition-opacity" />
+                              </a>
+                            </div>
+                          )}
+
+                          {/* Audio player preview */}
+                          {isAudio && (
+                            <div className="mt-1 p-2 rounded-lg bg-black/20 border border-subtle">
+                              <audio controls className="w-full h-8" preload="metadata">
+                                <source src={att.url} type={att.mimeType} />
+                                Your browser does not support audio element.
+                              </audio>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between text-[10px] text-muted font-mono pt-0.5">
+                            <span>{(att.size / 1024).toFixed(1)} KB</span>
+                            <span>{att.createdAt ? format(new Date(att.createdAt), 'MMM d, h:mm a') : ''}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* AI Insights Card */}
               {task.aiRisk && (
@@ -1148,6 +1369,95 @@ export function TaskDetailsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Submit For Review Modal */}
+      <SubmitForReviewModal
+        isOpen={isSubmitReviewModalOpen}
+        task={{ id: task.id, taskId: task.taskId, title: task.title }}
+        onClose={() => setIsSubmitReviewModalOpen(false)}
+      />
+
+      {/* Reject Task Modal */}
+      {isRejectModalOpen && createPortal(
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.75)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isRejecting) setIsRejectModalOpen(false);
+          }}
+        >
+          <div 
+            className="bg-surface border border-subtle rounded-2xl p-6 shadow-2xl max-w-md w-full space-y-4 animate-in fade-in zoom-in-95 duration-150"
+            style={{ backgroundColor: 'var(--bg-surface, #18181b)' }}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm text-primary flex items-center gap-2">
+                <XCircle className="text-rose-400" size={18} />
+                Reject Task Review
+              </h3>
+              <button 
+                onClick={() => setIsRejectModalOpen(false)} 
+                disabled={isRejecting}
+                className="text-muted hover:text-primary p-1 rounded-lg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            
+            <p className="text-xs text-muted leading-relaxed">
+              Please specify the reason for rejection. The task assignee will be notified immediately and the task status will be returned to <span className="text-amber-400 font-semibold">IN PROGRESS</span>.
+            </p>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-primary">
+                Rejection Reason / Feedback <span className="text-rose-400">*</span>
+              </label>
+              <textarea
+                rows={3}
+                required
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="State why the review was rejected (e.g., audio proof missing details, bug reproducible)..."
+                className="w-full text-xs bg-surface-hover/80 border border-subtle rounded-xl p-3 text-primary placeholder:text-muted focus:outline-none focus:border-rose-500/70 resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button 
+                type="button"
+                onClick={() => setIsRejectModalOpen(false)} 
+                disabled={isRejecting}
+                className="px-3.5 py-1.5 text-xs text-muted hover:text-primary rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRejectTask}
+                disabled={isRejecting || !rejectionReason.trim()}
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-500 rounded-xl transition-all shadow-md shadow-rose-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isRejecting ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
