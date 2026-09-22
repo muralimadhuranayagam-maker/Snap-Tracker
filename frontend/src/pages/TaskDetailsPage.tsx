@@ -1433,7 +1433,13 @@ export function TaskDetailsPage() {
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 placeholder="State why the review was rejected (e.g., audio proof missing details, bug reproducible)..."
-                className="w-full text-xs bg-surface-hover/80 border border-subtle rounded-xl p-3 text-primary placeholder:text-muted focus:outline-none focus:border-rose-500/70 resize-none"
+                className="input text-xs resize-none rounded-xl"
+                style={{
+                  backgroundColor: '#1f2029',
+                  color: '#f3f4f6',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  minHeight: '80px'
+                }}
               />
             </div>
 

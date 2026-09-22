@@ -195,7 +195,13 @@ export function SubmitForReviewModal({ isOpen, onClose, task, onSuccess }: Submi
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Provide context, details on implementation, test results, or links for the admin..."
-              className="w-full text-sm bg-surface-hover/80 border border-subtle rounded-xl p-3 text-primary placeholder:text-muted focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60 transition-all resize-none"
+              className="input text-sm resize-none rounded-xl"
+              style={{
+                backgroundColor: '#1f2029',
+                color: '#f3f4f6',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                minHeight: '100px'
+              }}
             />
           </div>
 
