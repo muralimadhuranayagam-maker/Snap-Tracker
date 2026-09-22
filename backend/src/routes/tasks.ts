@@ -522,6 +522,18 @@ router.patch('/:id', async (req, res, next) => {
             }
           });
         }
+
+        // Notify assignee when task is approved/marked DONE
+        if (task.assigneeId && task.assigneeId !== user.id) {
+          await createNotification({
+            userId: task.assigneeId,
+            taskId: task.id,
+            type: 'TASK_APPROVED',
+            title: `Task Approved: ${task.title}`,
+            message: `Your task was approved as completed by ${user.name}.`,
+            actionUrl: `/tasks/${task.id}`,
+          });
+        }
       }
 
       // If rejecting from IN_REVIEW -> IN_PROGRESS by Admin/Super Admin
@@ -594,7 +606,7 @@ router.patch('/:id', async (req, res, next) => {
 
       broadcast({
         type: WSEventTypes.TASK_STATUS_CHANGED,
-        payload: { taskId: task.taskId, oldStatus: task.status?.name, newStatus: newStatus.name }
+        payload: { taskId: task.taskId, id: task.id, oldStatus: task.status?.name, newStatus: newStatus.name, assigneeId: task.assigneeId }
       });
     }
 
@@ -989,7 +1001,7 @@ router.post('/:id/submit-review', taskUpload.array('files', 10), async (req, res
     // Realtime broadcasts
     broadcast({
       type: WSEventTypes.TASK_STATUS_CHANGED,
-      payload: { taskId: task.taskId, id: task.id, oldStatus: task.status?.name, newStatus: 'IN_REVIEW' }
+      payload: { taskId: task.taskId, id: task.id, oldStatus: task.status?.name, newStatus: 'IN_REVIEW', assigneeId: task.assigneeId }
     });
     broadcast({ type: WSEventTypes.TASK_UPDATED, payload: { id: task.id } });
     broadcast({ type: WSEventTypes.APPROVAL_REQUESTED, payload: approval });
@@ -1069,19 +1081,25 @@ router.post('/:id/approve', requireAdminOrAbove, async (req, res, next) => {
       }
     });
 
-    // Notify assignee
-    if (task.assigneeId) {
-      await createNotification({
-        userId: task.assigneeId,
-        taskId: task.id,
-        type: 'TASK_APPROVED',
-        title: `Task Approved: ${task.title}`,
-        message: `Your task was approved as completed by ${user.name}.`,
-        actionUrl: `/tasks/${task.id}`,
-      });
+    // Notify assignee and requester (employee gets notified with celebration sound)
+    const notifyUserIds = new Set<string>();
+    if (task.assigneeId) notifyUserIds.add(task.assigneeId);
+    if (pendingApproval?.requesterId) notifyUserIds.add(pendingApproval.requesterId);
+
+    for (const targetUserId of notifyUserIds) {
+      if (targetUserId !== user.id) {
+        await createNotification({
+          userId: targetUserId,
+          taskId: task.id,
+          type: 'TASK_APPROVED',
+          title: `Task Approved: ${task.title}`,
+          message: `Your task was approved as completed by ${user.name}.`,
+          actionUrl: `/tasks/${task.id}`,
+        });
+      }
     }
 
-    broadcast({ type: WSEventTypes.TASK_STATUS_CHANGED, payload: { taskId: task.taskId, id: task.id, newStatus: 'DONE' } });
+    broadcast({ type: WSEventTypes.TASK_STATUS_CHANGED, payload: { taskId: task.taskId, id: task.id, newStatus: 'DONE', assigneeId: task.assigneeId } });
     broadcast({ type: WSEventTypes.TASK_UPDATED, payload: { id: task.id } });
     broadcast({ type: WSEventTypes.WORKLOAD_UPDATED, payload: { taskId: task.id } });
 
@@ -1156,19 +1174,25 @@ router.post('/:id/reject', requireAdminOrAbove, async (req, res, next) => {
       }
     });
 
-    // Notify assignee
-    if (task.assigneeId) {
-      await createNotification({
-        userId: task.assigneeId,
-        taskId: task.id,
-        type: 'TASK_REJECTED',
-        title: `Task Review Rejected: ${task.title}`,
-        message: `Task returned to In Progress by ${user.name}: "${reason}"`,
-        actionUrl: `/tasks/${task.id}`,
-      });
+    // Notify assignee and requester (employee gets notified with warning sound)
+    const notifyUserIds = new Set<string>();
+    if (task.assigneeId) notifyUserIds.add(task.assigneeId);
+    if (pendingApproval?.requesterId) notifyUserIds.add(pendingApproval.requesterId);
+
+    for (const targetUserId of notifyUserIds) {
+      if (targetUserId !== user.id) {
+        await createNotification({
+          userId: targetUserId,
+          taskId: task.id,
+          type: 'TASK_REJECTED',
+          title: `Task Review Rejected: ${task.title}`,
+          message: `Task returned to In Progress by ${user.name}: "${reason}"`,
+          actionUrl: `/tasks/${task.id}`,
+        });
+      }
     }
 
-    broadcast({ type: WSEventTypes.TASK_STATUS_CHANGED, payload: { taskId: task.taskId, id: task.id, newStatus: 'IN_PROGRESS' } });
+    broadcast({ type: WSEventTypes.TASK_STATUS_CHANGED, payload: { taskId: task.taskId, id: task.id, newStatus: 'IN_PROGRESS', assigneeId: task.assigneeId } });
     broadcast({ type: WSEventTypes.TASK_UPDATED, payload: { id: task.id } });
 
     res.json(updatedTask);

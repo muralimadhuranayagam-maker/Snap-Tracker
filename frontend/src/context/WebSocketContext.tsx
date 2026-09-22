@@ -2,7 +2,12 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../store/authStore';
-import { playTaskAllocationSound } from '../utils/sound';
+import {
+  playTaskAllocationSound,
+  playReviewSubmittedSound,
+  playTaskApprovedSound,
+  playTaskRejectedSound,
+} from '../utils/sound';
 
 export interface WSEvent {
   type: string;
@@ -89,6 +94,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
           });
 
           const { type, payload } = data;
+          const currentUser = useAuthStore.getState().user;
+          const currentUserId = currentUser?.id;
+          const roleName = typeof currentUser?.role === 'object' ? (currentUser.role as any)?.name : currentUser?.role;
+          const isSuperAdmin = roleName === 'SUPER_ADMIN';
 
           // React Query Real-Time Invalidation & Live Dispatch
           if (type.startsWith('TASK_')) {
@@ -106,9 +115,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             }
 
             // Beep sound notification if task is allocated to the current user
-            const currentUserId = useAuthStore.getState().user?.id;
             if (type === 'TASK_ASSIGNED' && payload?.newAssigneeId && currentUserId && String(payload.newAssigneeId) === String(currentUserId)) {
               playTaskAllocationSound();
+            } else if (type === 'TASK_STATUS_CHANGED') {
+              if (payload?.newStatus === 'IN_REVIEW' && isSuperAdmin) {
+                // Super Admin notified with sound when task is moved to IN_REVIEW
+                playReviewSubmittedSound();
+              } else if (payload?.newStatus === 'DONE' && payload?.assigneeId && currentUserId && String(payload.assigneeId) === String(currentUserId)) {
+                // Employee notified with celebratory chime when task marked DONE
+                playTaskApprovedSound();
+              }
             }
           } else if (type.startsWith('TICKET_')) {
             queryClient.invalidateQueries({ queryKey: ['sidebar-badges'] });
@@ -126,20 +142,46 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             queryClient.invalidateQueries({ queryKey: ['dashboard'] });
             queryClient.invalidateQueries({ queryKey: ['mywork'] });
             if (type === 'APPROVAL_REQUESTED') {
-              toast(`New approval request: ${payload?.title || 'Approval required'}`, { icon: '📋' });
+              const isApprover = payload?.approverId && currentUserId && String(payload.approverId) === String(currentUserId);
+              if (isSuperAdmin || isApprover) {
+                // Super Admin gets notified with sound when an approval request arrives
+                playReviewSubmittedSound();
+              }
+              toast(`New review approval request: ${payload?.title || 'Approval required'}`, { icon: '🔍' });
             }
           } else if (type.startsWith('NOTIFICATION_') || type === 'SIDEBAR_BADGES_UPDATED') {
             queryClient.invalidateQueries({ queryKey: ['sidebar-badges'] });
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
             queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
             if (type === 'NOTIFICATION_NEW' && payload?.title) {
-              const isTaskAssignedNotification = payload.type === 'TASK_ASSIGNED' || payload.type === 'TASK_REASSIGNED';
-              if (isTaskAssignedNotification) {
+              const notifType = payload.type;
+              if (notifType === 'TASK_ASSIGNED' || notifType === 'TASK_REASSIGNED') {
                 // Play notification beep sound for allocated user
                 playTaskAllocationSound();
                 toast.success(payload.message ? `${payload.title}: ${payload.message}` : payload.title, {
                   icon: '📋',
                   duration: 6000,
+                });
+              } else if (notifType === 'REVIEW_REQUESTED') {
+                // Super Admin notified with audible sound when employee submits task for review
+                playReviewSubmittedSound();
+                toast.success(payload.message ? `${payload.title}: ${payload.message}` : payload.title, {
+                  icon: '🔍',
+                  duration: 7000,
+                });
+              } else if (notifType === 'TASK_APPROVED') {
+                // Employee notified with celebratory sound when Super Admin approves task
+                playTaskApprovedSound();
+                toast.success(payload.message ? `${payload.title}: ${payload.message}` : payload.title, {
+                  icon: '✅',
+                  duration: 7000,
+                });
+              } else if (notifType === 'TASK_REJECTED') {
+                // Employee notified with warning tone when Super Admin rejects task
+                playTaskRejectedSound();
+                toast.error(payload.message ? `${payload.title}: ${payload.message}` : payload.title, {
+                  icon: '❌',
+                  duration: 7000,
                 });
               } else {
                 toast(payload.message ? `${payload.title}: ${payload.message}` : payload.title, { icon: '🔔' });
