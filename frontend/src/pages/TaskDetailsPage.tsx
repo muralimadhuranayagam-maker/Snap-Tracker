@@ -493,11 +493,58 @@ export function TaskDetailsPage() {
                 flexShrink: 0
               }}>
                 <div>
-                  <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>
-                    Effort Logged
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>
+                      Effort Logged
+                    </span>
+                    {estimatedHours > 0 && (
+                      isTimeExceeded ? (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontSize: '9px',
+                          fontWeight: 800,
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                          color: '#ef4444',
+                          border: '1px solid rgba(239, 68, 68, 0.35)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em'
+                        }}>
+                          <AlertTriangle size={10} />
+                          <span>Overdue (+{(totalLoggedHours - estimatedHours).toFixed(1)}h)</span>
+                        </span>
+                      ) : (
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontSize: '9px',
+                          fontWeight: 800,
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                          color: '#22c55e',
+                          border: '1px solid rgba(34, 197, 94, 0.35)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em'
+                        }}>
+                          <CheckCircle2 size={10} />
+                          <span>On Time</span>
+                        </span>
+                      )
+                    )}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)' }}>
-                    {totalLoggedHours}h <span style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '13px' }}>/ {estimatedHours || 4}h</span>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '17px',
+                    fontWeight: 900,
+                    color: isTimeExceeded ? '#ef4444' : '#22c55e',
+                    lineHeight: 1.2
+                  }}>
+                    {totalLoggedHours}h <span style={{ color: isTimeExceeded ? 'rgba(239, 68, 68, 0.65)' : 'rgba(34, 197, 94, 0.65)', fontWeight: 600, fontSize: '13px' }}>/ {estimatedHours || 4}h</span>
                   </div>
                 </div>
 
@@ -1223,12 +1270,35 @@ export function TaskDetailsPage() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs font-medium">
                 <span className="text-muted">Effort Logged</span>
-                <span className="font-mono text-accent font-bold">{totalLoggedHours}h / {estimatedHours}h</span>
+                <span 
+                  className="font-mono font-bold"
+                  style={{ color: isTimeExceeded ? '#ef4444' : '#22c55e' }}
+                >
+                  {totalLoggedHours}h / {estimatedHours}h
+                  {estimatedHours > 0 && (
+                    <span style={{
+                      marginLeft: '6px',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      padding: '1px 5px',
+                      borderRadius: '4px',
+                      backgroundColor: isTimeExceeded ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+                      color: isTimeExceeded ? '#ef4444' : '#22c55e',
+                      border: `1px solid ${isTimeExceeded ? 'rgba(239, 68, 68, 0.35)' : 'rgba(34, 197, 94, 0.35)'}`,
+                      textTransform: 'uppercase'
+                    }}>
+                      {isTimeExceeded ? 'Overdue' : 'On Time'}
+                    </span>
+                  )}
+                </span>
               </div>
               <div className="w-full bg-elevated h-2 rounded-full overflow-hidden border border-subtle">
                 <div 
-                  className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${effortPct}%` }}
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{ 
+                    width: `${effortPct}%`,
+                    backgroundColor: isTimeExceeded ? '#ef4444' : '#22c55e'
+                  }}
                 />
               </div>
             </div>
