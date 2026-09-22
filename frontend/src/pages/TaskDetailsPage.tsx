@@ -273,6 +273,11 @@ export function TaskDetailsPage() {
   const blockedByDeps = task.blockedByDeps || [];
   const blockingDeps = task.blockingDeps || [];
 
+  // Find the latest review submission comment if any
+  const latestReviewComment = comments.slice().reverse().find((c: any) => 
+    c.content?.includes('[SUBMITTED FOR REVIEW]') || c.content?.includes('SUBMITTED FOR REVIEW')
+  );
+
   const currentStatusKey = task.status?.name || 'BACKLOG';
   const statusConfig = STATUS_CONFIG[currentStatusKey] || {
     label: currentStatusKey === 'DONE' ? 'COMPLETED' : currentStatusKey.replace('_', ' '),
@@ -341,22 +346,22 @@ export function TaskDetailsPage() {
               </button>
             )}
 
-            {/* In Review Actions: for Super Admin or Admin */}
+            {/* In Review Actions: for Super Admin or Admin - Big Vibrant Green & Red Buttons */}
             {currentStatusKey === 'IN_REVIEW' && isAdminOrSuper && (
               <>
                 <button 
-                  className="btn btn-sm flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm disabled:opacity-50"
+                  className="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-lg shadow-emerald-600/35 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
                   onClick={handleApproveTask}
                   disabled={isApproving}
                 >
-                  <CheckCircle2 size={15} />
+                  <CheckCircle2 size={18} />
                   <span>{isApproving ? 'Approving...' : 'Approve & Complete'}</span>
                 </button>
                 <button 
-                  className="btn btn-sm flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-sm"
+                  className="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-lg shadow-rose-600/35 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                   onClick={() => setIsRejectModalOpen(true)}
                 >
-                  <XCircle size={15} />
+                  <XCircle size={18} />
                   <span>Reject Review</span>
                 </button>
               </>
@@ -400,21 +405,21 @@ export function TaskDetailsPage() {
               </div>
             </div>
             {isAdminOrSuper && (
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-3 shrink-0">
                 <button
                   onClick={handleApproveTask}
                   disabled={isApproving}
-                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                  className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-600/35 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
                 >
-                  <CheckCircle2 size={14} />
-                  <span>Approve</span>
+                  <CheckCircle2 size={18} />
+                  <span>{isApproving ? 'Approving...' : 'Approve Task'}</span>
                 </button>
                 <button
                   onClick={() => setIsRejectModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                  className="px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-rose-600/35 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                 >
-                  <XCircle size={14} />
-                  <span>Reject</span>
+                  <XCircle size={18} />
+                  <span>Reject Task</span>
                 </button>
               </div>
             )}
@@ -796,6 +801,33 @@ export function TaskDetailsPage() {
                 </div>
               </div>
 
+              {/* Review Submission Comment & Notes (Directly displayed on the first page) */}
+              {latestReviewComment && (
+                <div className="card p-5 bg-amber-500/5 border border-amber-500/30 shadow-sm space-y-3 rounded-2xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs shrink-0 border border-amber-500/30">
+                        <ShieldCheck size={16} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-amber-300 flex items-center gap-2">
+                          <span>User Review Submission Note</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                            By {latestReviewComment.user?.name || 'Assignee'}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-muted">
+                          {format(new Date(latestReviewComment.createdAt), 'MMM d, yyyy • h:mm a')}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap bg-surface/90 p-4 rounded-xl border border-subtle">
+                    {latestReviewComment.content.replace('**[SUBMITTED FOR REVIEW]**', '').trim()}
+                  </div>
+                </div>
+              )}
+
               {/* Uploaded Verification Files & Attachments */}
               {task.attachments && task.attachments.length > 0 && (
                 <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3.5">
@@ -869,6 +901,81 @@ export function TaskDetailsPage() {
                   </div>
                 </div>
               )}
+
+              {/* Comments & Discussion Directly on the First Page */}
+              <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-4 rounded-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
+                    <MessageSquare size={14} className="text-accent" />
+                    <span>Comments & Discussion ({comments.length})</span>
+                  </div>
+                  <span className="text-[11px] text-muted">Full activity & notes</span>
+                </div>
+
+                {/* Inline Comment Input */}
+                <div className="space-y-2 pt-1">
+                  <textarea
+                    className="input text-xs w-full min-h-[75px] p-3 resize-none rounded-xl"
+                    style={{
+                      backgroundColor: '#1f2029',
+                      color: '#f3f4f6',
+                      border: '1px solid rgba(255, 255, 255, 0.12)'
+                    }}
+                    placeholder="Add a progress update, ask a question, or leave feedback directly on this task..."
+                    value={newComment}
+                    onChange={e => setNewComment(e.target.value)}
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted">AI engine automatically scans comments for blockers</span>
+                    <button
+                      className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm text-xs font-semibold px-3.5 py-1.5"
+                      disabled={!newComment.trim() || postCommentMutation.isPending}
+                      onClick={() => postCommentMutation.mutate(newComment)}
+                    >
+                      <Send size={12} /> Post Comment
+                    </button>
+                  </div>
+                </div>
+
+                {/* Comments Feed on First Page */}
+                <div className="space-y-3 pt-1">
+                  {comments.map((comment: any) => (
+                    <div key={comment.id} className="p-3.5 rounded-xl bg-surface-hover/70 border border-subtle space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 border border-subtle text-white font-bold text-[11px] flex items-center justify-center shadow-xs shrink-0">
+                            {comment.user?.avatar ? (
+                              <img src={comment.user.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                            ) : (
+                              comment.user?.name?.charAt(0).toUpperCase() || '?'
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-primary">{comment.user?.name}</div>
+                            <div className="text-[10px] text-muted">{format(new Date(comment.createdAt), 'MMM d, yyyy • h:mm a')}</div>
+                          </div>
+                        </div>
+
+                        {comment.aiFlag === 'BLOCKER' && (
+                          <span className="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold tracking-wider">
+                            BLOCKER DETECTED
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap pl-9">
+                        {comment.content}
+                      </div>
+                    </div>
+                  ))}
+
+                  {comments.length === 0 && (
+                    <div className="text-center py-6 text-muted text-xs">
+                      No comments recorded yet. Leave a note above.
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* AI Insights Card */}
               {task.aiRisk && (
