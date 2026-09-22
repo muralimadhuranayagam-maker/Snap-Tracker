@@ -593,6 +593,43 @@ h4 { font-size: 1rem; font-weight: 600; }
 }
 .btn-success:hover { background: var(--green); color: white; }
 
+/* Review Action Buttons: Vibrant Solid Colors */
+.btn-approve-solid {
+  background-color: #16a34a !important;
+  color: #ffffff !important;
+  border: 1px solid #15803d !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px 0 rgba(22, 163, 74, 0.4) !important;
+  transition: all 0.15s ease-in-out !important;
+}
+.btn-approve-solid:hover:not(:disabled) {
+  background-color: #15803d !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px 0 rgba(22, 163, 74, 0.5) !important;
+}
+.btn-approve-solid:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-reject-solid {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+  border: 1px solid #b91c1c !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px 0 rgba(220, 38, 38, 0.4) !important;
+  transition: all 0.15s ease-in-out !important;
+}
+.btn-reject-solid:hover:not(:disabled) {
+  background-color: #b91c1c !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px 0 rgba(220, 38, 38, 0.5) !important;
+}
+.btn-reject-solid:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 .btn-sm { padding: 4px 10px; font-size: 0.75rem; gap: 4px; }
 .btn-lg { padding: 10px 20px; font-size: 0.9375rem; }
 .btn-icon { padding: 7px; border-radius: var(--radius-md); }

@@ -346,27 +346,6 @@ export function TaskDetailsPage() {
               </button>
             )}
 
-            {/* In Review Actions: for Super Admin or Admin - Big Vibrant Green & Red Buttons */}
-            {currentStatusKey === 'IN_REVIEW' && isAdminOrSuper && (
-              <>
-                <button 
-                  className="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-lg shadow-emerald-600/35 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-                  onClick={handleApproveTask}
-                  disabled={isApproving}
-                >
-                  <CheckCircle2 size={18} />
-                  <span>{isApproving ? 'Approving...' : 'Approve & Complete'}</span>
-                </button>
-                <button 
-                  className="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-lg shadow-rose-600/35 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                  onClick={() => setIsRejectModalOpen(true)}
-                >
-                  <XCircle size={18} />
-                  <span>Reject Review</span>
-                </button>
-              </>
-            )}
-
             <button 
               className="btn btn-secondary btn-sm flex items-center gap-2 shadow-xs text-xs font-medium px-3.5 py-2 border border-subtle hover:border-accent/40"
               onClick={() => setIsLogWorkModalOpen(true)}
@@ -388,7 +367,7 @@ export function TaskDetailsPage() {
           </div>
         </div>
 
-        {/* Task Under Review Banner */}
+        {/* Task Under Review Banner with Dedicated Approve (Green) & Reject (Red) Buttons */}
         {currentStatusKey === 'IN_REVIEW' && (
           <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -409,14 +388,28 @@ export function TaskDetailsPage() {
                 <button
                   onClick={handleApproveTask}
                   disabled={isApproving}
-                  className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-600/35 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                  className="btn btn-approve-solid flex items-center gap-2 text-sm font-bold px-6 py-2.5 rounded-xl cursor-pointer"
+                  style={{
+                    backgroundColor: '#16a34a',
+                    color: '#ffffff',
+                    border: '1px solid #15803d',
+                    fontWeight: 700,
+                    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.45)',
+                  }}
                 >
                   <CheckCircle2 size={18} />
                   <span>{isApproving ? 'Approving...' : 'Approve Task'}</span>
                 </button>
                 <button
                   onClick={() => setIsRejectModalOpen(true)}
-                  className="px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-rose-600/35 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                  className="btn btn-reject-solid flex items-center gap-2 text-sm font-bold px-6 py-2.5 rounded-xl cursor-pointer"
+                  style={{
+                    backgroundColor: '#dc2626',
+                    color: '#ffffff',
+                    border: '1px solid #b91c1c',
+                    fontWeight: 700,
+                    boxShadow: '0 4px 14px rgba(220, 38, 38, 0.45)',
+                  }}
                 >
                   <XCircle size={18} />
                   <span>Reject Task</span>
