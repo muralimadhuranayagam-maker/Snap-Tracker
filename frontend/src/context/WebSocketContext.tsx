@@ -105,6 +105,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
             queryClient.invalidateQueries({ queryKey: ['mywork'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+            queryClient.invalidateQueries({ queryKey: ['active-tasks-velocity'] });
             queryClient.invalidateQueries({ queryKey: ['workload'] });
             queryClient.invalidateQueries({ queryKey: ['task-status-logs'] });
             if (payload?.id) {

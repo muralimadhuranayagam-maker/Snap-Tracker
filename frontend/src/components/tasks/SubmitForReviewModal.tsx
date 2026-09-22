@@ -95,6 +95,7 @@ export function SubmitForReviewModal({ isOpen, onClose, task, onSuccess }: Submi
       queryClient.invalidateQueries({ queryKey: ['task', task.id] });
       queryClient.invalidateQueries({ queryKey: ['approvals'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['active-tasks-velocity'] });
       queryClient.invalidateQueries({ queryKey: ['mywork'] });
 
       // Reset state

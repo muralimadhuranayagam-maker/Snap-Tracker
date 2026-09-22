@@ -79,6 +79,31 @@ async function generateTaskId(departmentCode: string): Promise<string> {
   return `${prefix}-${1001 + count}`;
 }
 
+// ─── LIVE WORKED HOURS CALCULATION HELPER ────────────────────────────────────
+export function calculateLiveTaskHours(task: any) {
+  if (!task) return task;
+  let actual = Number(task.actualHours || 0);
+  const statusName = task.status?.name;
+
+  if (statusName === 'IN_PROGRESS') {
+    const startTs = task.startDate ? new Date(task.startDate).getTime() : new Date(task.updatedAt || task.createdAt).getTime();
+    const elapsedHours = Math.max(0, (Date.now() - startTs) / (1000 * 60 * 60));
+    const sessionHours = elapsedHours > 0 && elapsedHours < 0.1 ? 0.1 : elapsedHours;
+    actual = Number((actual + sessionHours).toFixed(1));
+  } else if (statusName === 'IN_REVIEW' && actual === 0) {
+    const startTs = task.startDate ? new Date(task.startDate).getTime() : new Date(task.createdAt).getTime();
+    const endTs = new Date(task.updatedAt).getTime();
+    const elapsedHours = Math.max(0.1, (endTs - startTs) / (1000 * 60 * 60));
+    actual = Number(elapsedHours.toFixed(1));
+  }
+
+  return {
+    ...task,
+    actualHours: actual,
+    savedActualHours: Number(task.actualHours || 0),
+  };
+}
+
 // ─── TASK INCLUDES (reusable) ─────────────────────────────────────────────────
 const TASK_INCLUDE = {
   status: true,
@@ -191,7 +216,7 @@ router.get('/', async (req, res, next) => {
     ]);
 
     res.json({
-      tasks,
+      tasks: tasks.map(calculateLiveTaskHours),
       pagination: {
         total,
         page: parseInt(page as string),
@@ -347,7 +372,7 @@ router.get('/:id', async (req, res, next) => {
     ]);
 
     res.json({
-      ...task,
+      ...calculateLiveTaskHours(task),
       aiRisk: riskResult,
       aiPriorityScore: priorityScore,
     });
@@ -382,6 +407,15 @@ router.post('/', async (req, res, next) => {
       where: { name: 'BACKLOG' }
     });
 
+    const targetStatusId = statusId || defaultStatus?.id;
+    let finalStartDate = startDate ? new Date(startDate) : null;
+    if (!finalStartDate && statusId) {
+      const selectedStatus = await prisma.taskStatus.findUnique({ where: { id: statusId } });
+      if (selectedStatus?.name === 'IN_PROGRESS') {
+        finalStartDate = new Date();
+      }
+    }
+
     const taskId = await generateTaskId(deptCode);
 
     const task = await prisma.task.create({
@@ -394,11 +428,11 @@ router.post('/', async (req, res, next) => {
         milestoneId,
         taskTypeId,
         priorityId,
-        statusId: statusId || defaultStatus?.id,
+        statusId: targetStatusId,
         assigneeId: assigneeId || user.id,
         reporterId: user.id,
         reviewerId,
-        startDate: startDate ? new Date(startDate) : null,
+        startDate: finalStartDate,
         dueDate: dueDate ? new Date(dueDate) : null,
         estimatedHours: estimatedHours ? parseFloat(estimatedHours) : null,
         parentId,
@@ -445,7 +479,7 @@ router.post('/', async (req, res, next) => {
     const { executeWorkflows } = await import('../services/workflow');
     executeWorkflows('TASK_CREATED', task).catch(console.error);
 
-    res.status(201).json(task);
+    res.status(201).json(calculateLiveTaskHours(task));
   } catch (err) {
     next(err);
   }
@@ -502,6 +536,22 @@ router.patch('/:id', async (req, res, next) => {
       const validation = validateTransition(currentStatusName, newStatus.name, user.roleName);
       if (!validation.allowed) {
         throw new AppError(validation.reason || 'Invalid status transition', 403);
+      }
+
+      // Transition TO IN_PROGRESS: record active work start time
+      if (newStatus.name === 'IN_PROGRESS') {
+        if (startDate === undefined) {
+          updateData.startDate = new Date();
+        }
+      }
+
+      // Transition AWAY FROM IN_PROGRESS: accumulate worked hours into actualHours
+      if (currentStatusName === 'IN_PROGRESS' && newStatus.name !== 'IN_PROGRESS') {
+        const startTs = task.startDate ? new Date(task.startDate).getTime() : new Date(task.updatedAt).getTime();
+        const elapsedHours = Math.max(0, (Date.now() - startTs) / (1000 * 60 * 60));
+        const sessionHours = elapsedHours > 0 && elapsedHours < 0.1 ? 0.1 : elapsedHours;
+        const newActual = Number(((task.actualHours || 0) + sessionHours).toFixed(2));
+        updateData.actualHours = newActual;
       }
 
       if (newStatus.name === 'DONE') {
@@ -684,7 +734,7 @@ router.patch('/:id', async (req, res, next) => {
 
     broadcast({ type: WSEventTypes.TASK_UPDATED, payload: { id: updated.id, taskId: updated.taskId } });
 
-    res.json(updated);
+    res.json(calculateLiveTaskHours(updated));
   } catch (err) {
     next(err);
   }
@@ -937,11 +987,21 @@ router.post('/:id/submit-review', taskUpload.array('files', 10), async (req, res
       }
     });
 
+    // Calculate session duration if task was in IN_PROGRESS
+    let sessionHours = 0;
+    if (task.status?.name === 'IN_PROGRESS') {
+      const startTs = task.startDate ? new Date(task.startDate).getTime() : new Date(task.updatedAt).getTime();
+      const elapsedHours = Math.max(0, (Date.now() - startTs) / (1000 * 60 * 60));
+      sessionHours = elapsedHours > 0 && elapsedHours < 0.1 ? 0.1 : elapsedHours;
+    }
+    const updatedActualHours = Number(((task.actualHours || 0) + sessionHours).toFixed(2));
+
     // Update task status to IN_REVIEW
     const updatedTask = await prisma.task.update({
       where: { id: task.id },
       data: {
         statusId: inReviewStatus.id,
+        actualHours: updatedActualHours,
       },
       include: TASK_INCLUDE,
     });
@@ -1009,7 +1069,7 @@ router.post('/:id/submit-review', taskUpload.array('files', 10), async (req, res
 
     res.json({
       success: true,
-      task: updatedTask,
+      task: calculateLiveTaskHours(updatedTask),
       approval,
       comment,
       attachments: savedAttachments,
@@ -1035,11 +1095,20 @@ router.post('/:id/approve', requireAdminOrAbove, async (req, res, next) => {
     const doneStatus = await prisma.taskStatus.findFirst({ where: { name: 'DONE' } });
     if (!doneStatus) throw new AppError('DONE status not found', 500);
 
+    let sessionHours = 0;
+    if (task.status?.name === 'IN_PROGRESS') {
+      const startTs = task.startDate ? new Date(task.startDate).getTime() : new Date(task.updatedAt).getTime();
+      const elapsedHours = Math.max(0, (Date.now() - startTs) / (1000 * 60 * 60));
+      sessionHours = elapsedHours > 0 && elapsedHours < 0.1 ? 0.1 : elapsedHours;
+    }
+    const updatedActualHours = Number(((task.actualHours || 0) + sessionHours).toFixed(2));
+
     const updatedTask = await prisma.task.update({
       where: { id: task.id },
       data: {
         statusId: doneStatus.id,
         completedAt: new Date(),
+        actualHours: updatedActualHours,
       },
       include: TASK_INCLUDE,
     });
@@ -1103,7 +1172,7 @@ router.post('/:id/approve', requireAdminOrAbove, async (req, res, next) => {
     broadcast({ type: WSEventTypes.TASK_UPDATED, payload: { id: task.id } });
     broadcast({ type: WSEventTypes.WORKLOAD_UPDATED, payload: { taskId: task.id } });
 
-    res.json(updatedTask);
+    res.json(calculateLiveTaskHours(updatedTask));
   } catch (err) {
     next(err);
   }
@@ -1133,6 +1202,7 @@ router.post('/:id/reject', requireAdminOrAbove, async (req, res, next) => {
       where: { id: task.id },
       data: {
         statusId: inProgressStatus.id,
+        startDate: new Date(),
       },
       include: TASK_INCLUDE,
     });
@@ -1195,7 +1265,7 @@ router.post('/:id/reject', requireAdminOrAbove, async (req, res, next) => {
     broadcast({ type: WSEventTypes.TASK_STATUS_CHANGED, payload: { taskId: task.taskId, id: task.id, newStatus: 'IN_PROGRESS', assigneeId: task.assigneeId } });
     broadcast({ type: WSEventTypes.TASK_UPDATED, payload: { id: task.id } });
 
-    res.json(updatedTask);
+    res.json(calculateLiveTaskHours(updatedTask));
   } catch (err) {
     next(err);
   }

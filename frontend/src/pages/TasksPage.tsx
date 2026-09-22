@@ -132,6 +132,7 @@ export function TasksPage() {
       queryClient.invalidateQueries({ queryKey: ['task-status-logs'] });
       queryClient.invalidateQueries({ queryKey: ['mywork'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['active-tasks-velocity'] });
     } catch (err: any) {
       toast.error(err?.response?.data?.error || 'Failed to update task status');
       queryClient.invalidateQueries({ queryKey: ['tasks'] });

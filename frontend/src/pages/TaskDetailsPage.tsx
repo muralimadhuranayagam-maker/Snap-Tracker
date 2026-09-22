@@ -167,6 +167,7 @@ export function TaskDetailsPage() {
       queryClient.invalidateQueries({ queryKey: ['task-status-logs'] });
       queryClient.invalidateQueries({ queryKey: ['mywork'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['active-tasks-velocity'] });
     },
     onError: (err: any) => {
       toast.error(err?.response?.data?.error || 'Failed to update status');
@@ -261,7 +262,15 @@ export function TaskDetailsPage() {
   }
 
   // Derived metrics
-  const totalLoggedHours = task.worklogs?.reduce((sum: number, w: any) => sum + Number(w.hours), 0) || 0;
+  const worklogHours = task.worklogs?.reduce((sum: number, w: any) => sum + Number(w.hours), 0) || 0;
+  let totalLoggedHours = Math.max(worklogHours, Number(task.actualHours || 0));
+  if (task.status?.name === 'IN_PROGRESS') {
+    const baseHours = Number(task.savedActualHours ?? worklogHours);
+    const startTs = task.startDate ? new Date(task.startDate).getTime() : new Date(task.updatedAt || task.createdAt).getTime();
+    const elapsedHours = Math.max(0, (Date.now() - startTs) / (1000 * 60 * 60));
+    const liveSession = elapsedHours > 0 && elapsedHours < 0.1 ? 0.1 : elapsedHours;
+    totalLoggedHours = Math.max(totalLoggedHours, Number((baseHours + liveSession).toFixed(1)));
+  }
   const estimatedHours = task.estimatedHours || 0;
   const effortPct = estimatedHours > 0 ? Math.min(100, Math.round((totalLoggedHours / estimatedHours) * 100)) : 0;
   const comments = task.comments || [];

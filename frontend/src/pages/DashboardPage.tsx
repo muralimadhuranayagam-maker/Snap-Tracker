@@ -111,6 +111,7 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ['unassigned-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['active-tasks-velocity'] });
       setAllocatingTaskId(null);
       setSelectedAssignee('');
     },
@@ -130,7 +131,23 @@ export function DashboardPage() {
   // Compute Active Tasks & Velocity Metrics
   const activeTasksList = (activeTasksData || []).map((t: any) => {
     const est = t.estimatedHours && Number(t.estimatedHours) > 0 ? Number(t.estimatedHours) : 4;
-    const act = Number(t.actualHours || 0);
+    
+    // Live worked hours calculation for IN_PROGRESS tasks
+    let act = Number(t.actualHours || 0);
+    if (t.status?.name === 'IN_PROGRESS') {
+      const baseHours = Number(t.savedActualHours ?? 0);
+      const startTs = t.startDate ? new Date(t.startDate).getTime() : new Date(t.updatedAt || t.createdAt).getTime();
+      const elapsedHours = Math.max(0, (Date.now() - startTs) / (1000 * 60 * 60));
+      const liveSession = elapsedHours > 0 && elapsedHours < 0.1 ? 0.1 : elapsedHours;
+      const computedTotal = Number((baseHours + liveSession).toFixed(1));
+      act = Math.max(act, computedTotal);
+    } else if (t.status?.name === 'IN_REVIEW' && act === 0) {
+      const startTs = t.startDate ? new Date(t.startDate).getTime() : new Date(t.createdAt).getTime();
+      const endTs = new Date(t.updatedAt).getTime();
+      const elapsedHours = Math.max(0.1, (endTs - startTs) / (1000 * 60 * 60));
+      act = Number(elapsedHours.toFixed(1));
+    }
+
     const remaining = Math.max(0, Number((est - act).toFixed(1)));
     const pct = Math.min(100, Math.round((act / est) * 100));
 
