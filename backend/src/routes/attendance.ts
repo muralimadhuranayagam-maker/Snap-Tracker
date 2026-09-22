@@ -1849,12 +1849,70 @@ router.post('/clock-in', async (req, res, next) => {
   }
 });
 
-// POST /api/attendance/clock-out (Legacy alias mapped to end-workday)
-router.post('/clock-out', async (req, res, next) => {
+// POST /api/attendance/check-in (Check-in alias with photo and device info)
+router.post('/check-in', async (req, res, next) => {
   try {
     const userId = req.user!.id;
     const todayStr = getTodayDateString();
     const now = new Date();
+    const { image } = req.body;
+
+    let record = await prisma.attendanceRecord.findUnique({
+      where: {
+        userId_date: {
+          userId,
+          date: todayStr,
+        },
+      },
+    });
+
+    if (!record) {
+      record = await prisma.attendanceRecord.create({
+        data: {
+          userId,
+          date: todayStr,
+          status: 'PRESENT',
+          currentState: 'WORKING',
+          clockIn: now,
+          workStartedAt: now,
+          lastFaceDetectedAt: now,
+          notes: image || null,
+        },
+      });
+    } else {
+      record = await prisma.attendanceRecord.update({
+        where: { id: record.id },
+        data: {
+          currentState: 'WORKING',
+          clockIn: record.clockIn || now,
+          workStartedAt: record.workStartedAt || now,
+          lastFaceDetectedAt: now,
+          ...(image && { notes: image }),
+        },
+      });
+    }
+
+    broadcast({
+      type: 'ATTENDANCE_MARKED',
+      payload: { record },
+    });
+
+    res.status(201).json({
+      message: 'Morning attendance verified successfully!',
+      record,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/attendance/check-out (Logoff alias with notes)
+router.post('/check-out', async (req, res, next) => {
+  try {
+    const userId = req.user!.id;
+    const todayStr = getTodayDateString();
+    const now = new Date();
+    const { notes } = req.body;
 
     const record = await prisma.attendanceRecord.findUnique({
       where: {
@@ -1884,12 +1942,140 @@ router.post('/clock-out', async (req, res, next) => {
         clockOut: now,
         workEndedAt: now,
         totalAttendanceSeconds: totalDurationSeconds,
+        ...(notes && { notes }),
       },
     });
 
+    broadcast({
+      type: 'ATTENDANCE_CLOCKED_OUT',
+      payload: { record: updated },
+    });
+
     res.json({
-      message: 'Clocked out successfully',
+      message: 'Shift concluded successfully! Full daily activity transmitted.',
       record: updated,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/attendance/user/:userId/daily-summary
+router.get('/user/:userId/daily-summary', async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const dateStr = (req.query.date as string) || getTodayDateString();
+
+    const [user, record, worklogs, auditLogs] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatar: true,
+          role: { select: { name: true } },
+          department: { select: { id: true, code: true, name: true, color: true } },
+        },
+      }),
+      prisma.attendanceRecord.findUnique({
+        where: {
+          userId_date: {
+            userId,
+            date: dateStr,
+          },
+        },
+        include: {
+          intervals: {
+            orderBy: { startedAt: 'asc' },
+          },
+        },
+      }),
+      prisma.taskWorklog.findMany({
+        where: {
+          userId,
+          logDate: {
+            gte: new Date(`${dateStr}T00:00:00.000Z`),
+            lte: new Date(`${dateStr}T23:59:59.999Z`),
+          },
+        },
+        include: {
+          task: {
+            include: { status: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.auditLog.findMany({
+        where: {
+          userId,
+          createdAt: {
+            gte: new Date(`${dateStr}T00:00:00.000Z`),
+            lte: new Date(`${dateStr}T23:59:59.999Z`),
+          },
+        },
+        take: 30,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    const totalSeconds = record?.totalAttendanceSeconds || record?.verifiedWorkingSeconds || 0;
+    const totalActiveHours = Math.round((totalSeconds / 3600) * 10) / 10;
+    const totalWorklogHours = Math.round(worklogs.reduce((acc, w) => acc + (w.hours || 0), 0) * 10) / 10;
+
+    let status = 'NOT_STARTED';
+    if (record) {
+      if (record.isCompleted || record.currentState === 'WORKDAY_COMPLETED') {
+        status = 'CHECKED_OUT';
+      } else {
+        status = 'CHECKED_IN';
+      }
+    }
+
+    const isImageNote = record?.notes ? record.notes.startsWith('data:image') : false;
+    const photoUrl = isImageNote && record ? record.notes : null;
+    const textNotes = !isImageNote && record ? record.notes : null;
+
+    res.json({
+      user,
+      attendance: record
+        ? {
+            status,
+            checkInTime: record.clockIn || record.attendanceMarkedAt,
+            checkOutTime: record.clockOut,
+            checkInPhoto: photoUrl,
+            currentState: record.currentState,
+            verifiedWorkingSeconds: record.verifiedWorkingSeconds,
+            breakSeconds: record.breakSeconds,
+            lunchSeconds: record.lunchSeconds,
+            meetingSeconds: record.meetingSeconds,
+          }
+        : null,
+      summary: {
+        totalActiveHours,
+        totalWorklogHours,
+        notes: textNotes || '',
+        stats: {
+          worklogsCount: worklogs.length,
+          tasksCompletedCount: worklogs.filter(
+            (w) =>
+              w.task?.status?.name?.toLowerCase().includes('done') ||
+              w.task?.status?.name?.toLowerCase().includes('complete')
+          ).length,
+          tasksUpdatedCount: worklogs.length,
+          ticketsCount: 0,
+          commentsCount: 0,
+          auditActionsCount: auditLogs.length,
+        },
+        worklogs,
+        tasksUpdated: worklogs.map((w) => w.task).filter(Boolean),
+        tickets: [],
+        auditLogs,
+      },
     });
   } catch (err) {
     next(err);
