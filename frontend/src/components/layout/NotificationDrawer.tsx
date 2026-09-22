@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { X, Check, Bell, ExternalLink, Clock } from 'lucide-react';
+import { X, Check, Bell, ExternalLink, Clock, Volume2, VolumeX } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { api } from '../../services/api';
 import { formatDistanceToNow } from 'date-fns';
+import { isTaskSoundEnabled, setTaskSoundEnabled, testTaskSound } from '../../utils/sound';
 
 interface NotificationDrawerProps {
   isOpen: boolean;
@@ -12,6 +15,7 @@ interface NotificationDrawerProps {
 export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [soundEnabled, setSound] = useState(isTaskSoundEnabled);
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
@@ -37,6 +41,23 @@ export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps)
   if (!isOpen) return null;
 
   const unreadCount = notifications.filter((n: any) => !n.isRead).length;
+
+  const handleToggleSound = () => {
+    const nextState = !soundEnabled;
+    setTaskSoundEnabled(nextState);
+    setSound(nextState);
+    if (nextState) {
+      testTaskSound();
+      toast.success('Task beep sound enabled', { icon: '🔊' });
+    } else {
+      toast('Task beep sound muted', { icon: '🔇' });
+    }
+  };
+
+  const handleTestBeep = () => {
+    testTaskSound();
+    toast.success('Task alert beep playing', { icon: '🔔' });
+  };
 
   const handleItemClick = (n: any) => {
     if (!n.isRead) {
@@ -64,7 +85,25 @@ export function NotificationDrawer({ isOpen, onClose }: NotificationDrawerProps)
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              className={`btn btn-ghost btn-xs p-1.5 rounded-lg flex items-center gap-1 text-xs transition ${
+                soundEnabled ? 'text-accent hover:bg-accent/10' : 'text-muted hover:text-primary'
+              }`}
+              onClick={handleToggleSound}
+              title={soundEnabled ? 'Mute task beep sound' : 'Enable task beep sound'}
+            >
+              {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+            </button>
+
+            <button
+              className="btn btn-ghost btn-xs px-2 py-1 rounded-lg text-[11px] text-muted hover:text-accent font-medium border border-subtle/60"
+              onClick={handleTestBeep}
+              title="Test notification chime sound"
+            >
+              Test Beep
+            </button>
+
             {unreadCount > 0 && (
               <button 
                 className="btn btn-ghost btn-sm text-xs text-muted hover:text-primary flex items-center gap-1"

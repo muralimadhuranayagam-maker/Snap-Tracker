@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { createNotification } from './notifications';
 
 /**
  * Workflow Execution Engine
@@ -108,15 +109,13 @@ async function sendWorkflowNotification(triggerTask: any, config: any) {
   }
 
   for (const userId of targetUserIds) {
-    await prisma.notification.create({
-      data: {
-        userId,
-        taskId: triggerTask.id,
-        type: 'TASK_ASSIGNED',
-        title: config.title || 'Workflow notification',
-        message: config.message?.replace('{{taskId}}', triggerTask.taskId) || `Workflow triggered for ${triggerTask.taskId}`,
-        actionUrl: `/tasks/${triggerTask.id}`,
-      }
+    await createNotification({
+      userId,
+      taskId: triggerTask.id,
+      type: 'TASK_ASSIGNED',
+      title: config.title || 'Workflow notification',
+      message: config.message?.replace('{{taskId}}', triggerTask.taskId) || `Workflow triggered for ${triggerTask.taskId}`,
+      actionUrl: `/tasks/${triggerTask.id}`,
     });
   }
 }

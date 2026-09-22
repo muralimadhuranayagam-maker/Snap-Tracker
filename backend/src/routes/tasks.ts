@@ -398,7 +398,7 @@ router.post('/', async (req, res, next) => {
     });
 
     // Notify assignee
-    if (assigneeId && assigneeId !== user.id) {
+    if (assigneeId) {
       await notifyTaskAssigned(task.id, assigneeId, user.name);
     }
 
@@ -709,7 +709,10 @@ router.post('/bulk', requireAdminOrAbove, async (req, res, next) => {
     for (const id of taskIds) {
       try {
         const updateData: any = {};
-        if (action === 'ASSIGN' && value) updateData.assigneeId = value;
+        if (action === 'ASSIGN' && value) {
+          updateData.assigneeId = value;
+          notifyTaskAssigned(id, value, req.user!.name).catch(console.error);
+        }
         if (action === 'CHANGE_STATUS' && value) updateData.statusId = value;
         if (action === 'CHANGE_PRIORITY' && value) updateData.priorityId = value;
         if (action === 'CHANGE_DUE_DATE' && value) updateData.dueDate = new Date(value);

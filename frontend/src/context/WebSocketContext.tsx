@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../store/authStore';
+import { playTaskAllocationSound } from '../utils/sound';
 
 export interface WSEvent {
   type: string;
@@ -103,6 +104,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             if (payload?.taskId) {
               queryClient.invalidateQueries({ queryKey: ['task', payload.taskId] });
             }
+
+            // Beep sound notification if task is allocated to the current user
+            const currentUserId = useAuthStore.getState().user?.id;
+            if (type === 'TASK_ASSIGNED' && payload?.newAssigneeId && currentUserId && String(payload.newAssigneeId) === String(currentUserId)) {
+              playTaskAllocationSound();
+            }
           } else if (type.startsWith('TICKET_')) {
             queryClient.invalidateQueries({ queryKey: ['sidebar-badges'] });
             queryClient.invalidateQueries({ queryKey: ['tickets'] });
@@ -126,7 +133,29 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
             queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
             if (type === 'NOTIFICATION_NEW' && payload?.title) {
-              toast(payload.message ? `${payload.title}: ${payload.message}` : payload.title, { icon: '🔔' });
+              const isTaskAssignedNotification = payload.type === 'TASK_ASSIGNED' || payload.type === 'TASK_REASSIGNED';
+              if (isTaskAssignedNotification) {
+                // Play notification beep sound for allocated user
+                playTaskAllocationSound();
+                toast.success(payload.message ? `${payload.title}: ${payload.message}` : payload.title, {
+                  icon: '📋',
+                  duration: 6000,
+                });
+              } else {
+                toast(payload.message ? `${payload.title}: ${payload.message}` : payload.title, { icon: '🔔' });
+              }
+
+              // Optional native OS notification when app is running in background or minimized
+              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                try {
+                  new Notification(payload.title, {
+                    body: payload.message || 'You have a new notification in SnapServe Tracker',
+                    icon: '/favicon.ico',
+                  });
+                } catch {
+                  // Ignore desktop notification permission or background error
+                }
+              }
             }
           } else if (type.startsWith('WORKLOAD_')) {
             queryClient.invalidateQueries({ queryKey: ['workload'] });
