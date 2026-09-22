@@ -29,7 +29,8 @@ import {
   Music,
   Video,
   Image as ImageIcon,
-  Download
+  Download,
+  UserCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -280,6 +281,9 @@ export function TaskDetailsPage() {
     c.content?.includes('[SUBMITTED FOR REVIEW]') || c.content?.includes('SUBMITTED FOR REVIEW')
   );
 
+  // Performer / employee who executed or completed this task
+  const performer = latestReviewComment?.user || task.assignee || task.reporter;
+
   const currentStatusKey = task.status?.name || 'BACKLOG';
   const statusConfig = STATUS_CONFIG[currentStatusKey] || {
     label: currentStatusKey === 'DONE' ? 'COMPLETED' : currentStatusKey.replace('_', ' '),
@@ -370,34 +374,61 @@ export function TaskDetailsPage() {
           </div>
         </div>
 
-        {/* Task Under Review Banner with Dedicated Approve (Green) & Reject (Red) Buttons */}
+        {/* Task Under Review Banner with Prominent Performer Highlight & Actions */}
         {currentStatusKey === 'IN_REVIEW' && (
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
-                <ShieldCheck size={22} />
+          <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-surface border-2 border-amber-500/40 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="flex items-center gap-4">
+              <div className="relative shrink-0">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-600 text-white font-black text-xl flex items-center justify-center shadow-lg ring-2 ring-amber-400/50">
+                  {performer?.avatar ? (
+                    <img src={performer.avatar} alt="" className="w-full h-full rounded-2xl object-cover" />
+                  ) : (
+                    (performer?.name || 'U').charAt(0).toUpperCase()
+                  )}
+                </div>
+                <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-surface rounded-full shadow-sm" title="Active Assignee" />
               </div>
-              <div>
-                <h3 className="text-xs font-bold text-amber-300">Task Under Review & Verification</h3>
-                <p className="text-[11px] text-amber-200/80 leading-relaxed">
-                  {isAdminOrSuper 
-                    ? 'This task was submitted for completion review. Inspect the uploaded proof files, voice memos, and comments below before deciding.'
-                    : 'Submitted for completion review. Your Super Admin will verify the files and notes before moving this task to Completed.'}
-                </p>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-amber-500/25 text-amber-300 border border-amber-500/40">
+                    Needs Super Admin Review & Approval
+                  </span>
+                  {task.department && (
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold font-mono bg-surface border border-subtle text-amber-200">
+                      {task.department.code || task.department.name}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-xs text-amber-200/90 font-medium">Task Completed & Submitted By:</span>
+                  <span className="text-xl sm:text-2xl font-black text-white tracking-tight underline decoration-amber-400/50 underline-offset-4">
+                    {performer?.name || 'Assigned Employee'}
+                  </span>
+                </div>
+                {(performer?.email || task.department?.name) && (
+                  <p className="text-xs text-amber-200/70 flex items-center gap-2 flex-wrap">
+                    {performer?.email && <span>{performer.email}</span>}
+                    {task.department?.name && <span>• {task.department.name}</span>}
+                    {latestReviewComment?.createdAt && (
+                      <span>• Submitted {format(new Date(latestReviewComment.createdAt), 'MMM d, yyyy • h:mm a')}</span>
+                    )}
+                  </p>
+                )}
               </div>
             </div>
+
             {isAdminOrSuper && (
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
                 <button
                   onClick={handleApproveTask}
                   disabled={isApproving}
-                  className="btn btn-approve-solid flex items-center gap-2 text-sm font-bold px-6 py-2.5 rounded-xl cursor-pointer"
+                  className="btn btn-approve-solid flex items-center gap-2 text-sm font-bold px-6 py-3 rounded-xl cursor-pointer transition-transform active:scale-95"
                   style={{
                     backgroundColor: '#16a34a',
                     color: '#ffffff',
                     border: '1px solid #15803d',
-                    fontWeight: 700,
-                    boxShadow: '0 4px 14px rgba(22, 163, 74, 0.45)',
+                    fontWeight: 800,
+                    boxShadow: '0 4px 16px rgba(22, 163, 74, 0.45)',
                   }}
                 >
                   <CheckCircle2 size={18} />
@@ -405,13 +436,13 @@ export function TaskDetailsPage() {
                 </button>
                 <button
                   onClick={() => setIsRejectModalOpen(true)}
-                  className="btn btn-reject-solid flex items-center gap-2 text-sm font-bold px-6 py-2.5 rounded-xl cursor-pointer"
+                  className="btn btn-reject-solid flex items-center gap-2 text-sm font-bold px-6 py-3 rounded-xl cursor-pointer transition-transform active:scale-95"
                   style={{
                     backgroundColor: '#dc2626',
                     color: '#ffffff',
                     border: '1px solid #b91c1c',
-                    fontWeight: 700,
-                    boxShadow: '0 4px 14px rgba(220, 38, 38, 0.45)',
+                    fontWeight: 800,
+                    boxShadow: '0 4px 16px rgba(220, 38, 38, 0.45)',
                   }}
                 >
                   <XCircle size={18} />
@@ -422,33 +453,102 @@ export function TaskDetailsPage() {
           </div>
         )}
 
-        {/* Row 2: Task Title & Badges */}
-        <div className="space-y-3 pt-1">
-          {/* Project Hierarchy Badge */}
-          {task.project ? (
-            <div 
-              className="badge-project"
-              onClick={() => navigate(`/projects/${task.project.id}`)}
-              title="Click to view project details"
-            >
-              <FolderKanban size={14} className="badge-project-icon" />
-              <span className="badge-project-label">Project:</span>
-              <span className="badge-project-name">{task.project.name}</span>
-              <ArrowRight size={13} className="badge-project-arrow" />
-            </div>
-          ) : (
-            <div 
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-elevated text-xs text-muted border border-subtle w-fit"
-              style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}
-            >
-              <FolderKanban size={13} className="shrink-0" />
-              <span>No Project Linked</span>
-            </div>
-          )}
+        {/* Row 2: Large Highlighted Task Title & High-Visibility Employee Showcase */}
+        <div className="space-y-4 pt-1">
+          {/* Breadcrumb & Project Tag */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="font-mono text-xs sm:text-sm font-black text-blue-400 bg-blue-500/15 px-3 py-1 rounded-lg border border-blue-500/30 tracking-wider">
+              {task.taskId}
+            </span>
 
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-primary leading-tight">
-            {task.title}
-          </h1>
+            {task.project ? (
+              <div 
+                className="badge-project cursor-pointer hover:border-blue-500/50"
+                onClick={() => navigate(`/projects/${task.project.id}`)}
+                title="Click to view project details"
+              >
+                <FolderKanban size={13} className="badge-project-icon text-blue-400" />
+                <span className="badge-project-label">Project:</span>
+                <span className="badge-project-name font-bold">{task.project.name}</span>
+                <ArrowRight size={12} className="badge-project-arrow" />
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-elevated text-xs text-muted border border-subtle w-fit">
+                <FolderKanban size={13} className="shrink-0" />
+                <span>No Project Linked</span>
+              </div>
+            )}
+
+            {task.customer && (
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
+                Client: {task.customer.name}
+              </span>
+            )}
+          </div>
+
+          {/* LARGE HIGHLIGHTED TASK TITLE */}
+          <div className="space-y-1">
+            <span className="text-[11px] font-extrabold uppercase tracking-widest text-blue-400">
+              Task Deliverable
+            </span>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight drop-shadow-sm">
+              {task.title}
+            </h1>
+          </div>
+
+          {/* HIGH-VISIBILITY EMPLOYEE ATTRIBUTION SHOWCASE CARD */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-surface to-surface border border-blue-500/30 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="relative shrink-0">
+                <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white font-black text-xl flex items-center justify-center shadow-lg ring-2 ring-blue-400/40">
+                  {performer?.avatar ? (
+                    <img src={performer.avatar} alt="" className="w-full h-full rounded-2xl object-cover" />
+                  ) : (
+                    (performer?.name || 'U').charAt(0).toUpperCase()
+                  )}
+                </div>
+                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-surface rounded-full shadow-sm" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-[11px] font-extrabold uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                  <UserCheck size={14} className="text-blue-400" />
+                  <span>Task Executed & Handled By</span>
+                </div>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                    {performer?.name || 'Unassigned'}
+                  </span>
+                  {task.department && (
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 font-mono">
+                      {task.department.code || task.department.name}
+                    </span>
+                  )}
+                  {task.assignee?.id === performer?.id && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                      Assignee & Owner
+                    </span>
+                  )}
+                </div>
+                {performer?.email && (
+                  <div className="text-xs text-muted font-normal">
+                    {performer.email}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Metrics */}
+            <div className="flex items-center gap-5 pt-2 sm:pt-0 sm:border-l sm:border-subtle sm:pl-5 shrink-0">
+              <div>
+                <div className="text-[10px] text-muted uppercase font-semibold">Effort Logged</div>
+                <div className="font-mono text-base font-bold text-accent">{totalLoggedHours}h / {estimatedHours || 4}h</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-muted uppercase font-semibold">Priority</div>
+                <div className="text-xs font-bold text-primary uppercase">{task.priority?.name || 'MEDIUM'}</div>
+              </div>
+            </div>
+          </div>
 
           <div className="flex items-center gap-5 sm:gap-7 flex-wrap pt-2">
             {/* Status Custom Dropdown */}
@@ -710,54 +810,51 @@ export function TaskDetailsPage() {
         
         {/* Left Column (2/3) */}
         <div className="lg:col-span-2 space-y-6">
-          
-          {/* Overview Section */}
-          <div className="flex items-center gap-2">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-surface border border-subtle text-xs font-bold text-primary shadow-xs">
-              <FileText size={14} className="text-accent" />
-              <span>Overview</span>
+
+          {/* Task Deliverable Description Box */}
+          <div className="card p-6 bg-surface border border-subtle shadow-sm space-y-3 rounded-2xl">
+            <div className="flex items-center justify-between border-b border-subtle/80 pb-3">
+              <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
+                <FileText size={15} className="text-blue-400" />
+                <span>Deliverable Description</span>
+              </div>
+              <span className="text-[11px] text-muted font-mono">{task.taskId}</span>
+            </div>
+            <div className="p-4 rounded-xl bg-elevated/40 border border-subtle/80 text-sm text-primary leading-relaxed whitespace-pre-wrap min-h-[60px]">
+              {task.description ? (
+                task.description
+              ) : (
+                <span className="text-muted italic">No detailed description provided for this deliverable.</span>
+              )}
             </div>
           </div>
 
-          <div className="space-y-6">
-            {/* Task Description */}
-            <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-3">
-              <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
-                <FileText size={14} className="text-accent" /> Description
-              </div>
-              <div className="text-sm text-primary leading-relaxed whitespace-pre-wrap pl-1">
-                {task.description || (
-                  <span className="text-muted italic">No detailed description provided for this deliverable.</span>
-                )}
-              </div>
-            </div>
-
-            {/* Review Submission Comment & Notes (Directly displayed on the first page) */}
-            {latestReviewComment && (
-              <div className="card p-5 bg-amber-500/5 border border-amber-500/30 shadow-sm space-y-3 rounded-2xl">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs shrink-0 border border-amber-500/30">
-                      <ShieldCheck size={16} />
+          {/* Review Submission Comment & Notes */}
+          {latestReviewComment && (
+            <div className="card p-6 bg-amber-500/5 border border-amber-500/30 shadow-sm space-y-3.5 rounded-2xl border-l-4 border-l-amber-500">
+              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-amber-500/20 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm shrink-0 border border-amber-500/30">
+                    <ShieldCheck size={18} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-amber-300 flex items-center gap-2">
+                      <span>User Review Submission Note</span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        By {latestReviewComment.user?.name || performer?.name || 'Assignee'}
+                      </span>
                     </div>
-                    <div>
-                      <div className="text-xs font-bold text-amber-300 flex items-center gap-2">
-                        <span>User Review Submission Note</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/20">
-                          By {latestReviewComment.user?.name || 'Assignee'}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-muted">
-                        {format(new Date(latestReviewComment.createdAt), 'MMM d, yyyy • h:mm a')}
-                      </div>
+                    <div className="text-[11px] text-muted">
+                      {format(new Date(latestReviewComment.createdAt), 'MMMM d, yyyy • h:mm a')}
                     </div>
                   </div>
                 </div>
-                <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap bg-surface/90 p-4 rounded-xl border border-subtle">
-                  {latestReviewComment.content.replace('**[SUBMITTED FOR REVIEW]**', '').trim()}
-                </div>
               </div>
-            )}
+              <div className="p-4 rounded-xl bg-surface border border-subtle text-sm text-primary leading-relaxed whitespace-pre-wrap font-medium shadow-inner">
+                {latestReviewComment.content.replace('**[SUBMITTED FOR REVIEW]**', '').trim()}
+              </div>
+            </div>
+          )}
 
             {/* Uploaded Verification Files & Attachments */}
             {task.attachments && task.attachments.length > 0 && (
@@ -833,48 +930,44 @@ export function TaskDetailsPage() {
               </div>
             )}
 
-            {/* Comments & Discussion Directly on the Overview Page */}
-            <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-4 rounded-2xl">
-              <div className="flex items-center justify-between">
+            {/* Comments & Discussion */}
+            <div className="card p-6 bg-surface border border-subtle shadow-sm space-y-4 rounded-2xl">
+              <div className="flex items-center justify-between border-b border-subtle/80 pb-3">
                 <div className="flex items-center gap-2 font-bold text-xs text-muted uppercase tracking-wider">
-                  <MessageSquare size={14} className="text-accent" />
+                  <MessageSquare size={15} className="text-blue-400" />
                   <span>Comments & Discussion ({comments.length})</span>
                 </div>
-                <span className="text-[11px] text-muted">Full activity & notes</span>
+                <span className="text-[11px] text-muted">Direct activity & feedback</span>
               </div>
 
               {/* Inline Comment Input */}
-              <div className="space-y-2 pt-1">
+              <div className="space-y-2.5">
                 <textarea
-                  className="input text-xs w-full min-h-[75px] p-3 resize-none rounded-xl"
-                  style={{
-                    backgroundColor: '#1f2029',
-                    color: '#f3f4f6',
-                    border: '1px solid rgba(255, 255, 255, 0.12)'
-                  }}
+                  className="w-full text-xs sm:text-sm bg-elevated/50 text-primary p-3.5 rounded-xl border border-subtle focus:border-accent focus:outline-none transition-all placeholder:text-muted resize-none min-h-[85px] leading-relaxed"
                   placeholder="Add a progress update, ask a question, or leave feedback directly on this task..."
                   value={newComment}
                   onChange={e => setNewComment(e.target.value)}
                 />
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-muted">AI engine automatically scans comments for blockers</span>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <span className="text-[11px] text-muted">AI engine automatically scans comments for blockers</span>
                   <button
-                    className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm text-xs font-semibold px-3.5 py-1.5"
+                    className="btn btn-primary btn-sm flex items-center gap-1.5 shadow-sm text-xs font-semibold px-4 py-2 rounded-xl cursor-pointer ml-auto"
                     disabled={!newComment.trim() || postCommentMutation.isPending}
                     onClick={() => postCommentMutation.mutate(newComment)}
                   >
-                    <Send size={12} /> Post Comment
+                    <Send size={13} />
+                    <span>{postCommentMutation.isPending ? 'Posting...' : 'Post Comment'}</span>
                   </button>
                 </div>
               </div>
 
               {/* Comments Feed on First Page */}
-              <div className="space-y-3 pt-1">
+              <div className="space-y-3 pt-2">
                 {comments.map((comment: any) => (
-                  <div key={comment.id} className="p-3.5 rounded-xl bg-surface-hover/70 border border-subtle space-y-2">
+                  <div key={comment.id} className="p-4 rounded-xl bg-surface-hover/50 border border-subtle space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 border border-subtle text-white font-bold text-[11px] flex items-center justify-center shadow-xs shrink-0">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 border border-subtle text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
                           {comment.user?.avatar ? (
                             <img src={comment.user.avatar} alt="" className="w-full h-full rounded-full object-cover" />
                           ) : (
@@ -882,7 +975,14 @@ export function TaskDetailsPage() {
                           )}
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-primary">{comment.user?.name}</div>
+                          <div className="text-xs font-bold text-primary flex items-center gap-2">
+                            <span>{comment.user?.name}</span>
+                            {comment.user?.id === task.assigneeId && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-400/20">
+                                Assignee
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-muted">{format(new Date(comment.createdAt), 'MMM d, yyyy • h:mm a')}</div>
                         </div>
                       </div>
@@ -894,7 +994,7 @@ export function TaskDetailsPage() {
                       )}
                     </div>
 
-                    <div className="text-xs text-primary leading-relaxed whitespace-pre-wrap pl-9">
+                    <div className="text-xs sm:text-sm text-primary leading-relaxed whitespace-pre-wrap pl-11">
                       {comment.content}
                     </div>
                   </div>
@@ -928,7 +1028,6 @@ export function TaskDetailsPage() {
               </div>
             )}
           </div>
-        </div>
 
         {/* Right Sidebar Metadata (1/3) */}
         <div className="space-y-5">
@@ -981,30 +1080,30 @@ export function TaskDetailsPage() {
           </div>
 
           {/* Card 2: People & Ownership */}
-          <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-4">
+          <div className="card p-5 bg-surface border border-subtle shadow-sm space-y-4 rounded-2xl">
             <div className="text-xs font-bold text-muted uppercase tracking-wider flex items-center gap-2 border-b border-subtle pb-2.5">
               <Users size={15} className="text-amber-400" /> People & Ownership
             </div>
 
             {/* Assignee */}
             <div className="space-y-1.5">
-              <span className="text-[11px] text-muted font-semibold uppercase tracking-wider block">Assignee</span>
+              <span className="text-[11px] text-muted font-semibold uppercase tracking-wider block">Task Assignee & Deliverer</span>
               {task.assignee ? (
-                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-elevated/50 border border-subtle">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-600 border border-subtle text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-elevated/50 border border-subtle">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-600 border border-subtle text-white font-bold text-sm flex items-center justify-center shadow-xs shrink-0">
                     {task.assignee.avatar ? (
-                      <img src={task.assignee.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                      <img src={task.assignee.avatar} alt="" className="w-full h-full rounded-xl object-cover" />
                     ) : (
                       task.assignee.name.charAt(0).toUpperCase()
                     )}
                   </div>
                   <div className="truncate">
-                    <div className="text-xs font-bold text-primary">{task.assignee.name}</div>
-                    <div className="text-[11px] text-muted truncate">{task.assignee.email}</div>
+                    <div className="text-sm font-bold text-primary">{task.assignee.name}</div>
+                    <div className="text-xs text-muted truncate">{task.assignee.email}</div>
                   </div>
                 </div>
               ) : (
-                <div className="p-2.5 rounded-xl bg-elevated/40 border border-subtle text-xs text-muted italic">
+                <div className="p-3 rounded-xl bg-elevated/40 border border-subtle text-xs text-muted italic">
                   Unassigned
                 </div>
               )}
@@ -1012,19 +1111,19 @@ export function TaskDetailsPage() {
 
             {/* Reporter */}
             <div className="space-y-1.5 pt-1">
-              <span className="text-[11px] text-muted font-semibold uppercase tracking-wider block">Reporter</span>
+              <span className="text-[11px] text-muted font-semibold uppercase tracking-wider block">Task Creator & Reporter</span>
               {task.reporter ? (
-                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-elevated/50 border border-subtle">
-                  <div className="w-8 h-8 rounded-full bg-slate-700 border border-subtle text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-elevated/50 border border-subtle">
+                  <div className="w-9 h-9 rounded-xl bg-slate-700 border border-subtle text-white font-bold text-xs flex items-center justify-center shadow-xs shrink-0">
                     {task.reporter.avatar ? (
-                      <img src={task.reporter.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                      <img src={task.reporter.avatar} alt="" className="w-full h-full rounded-xl object-cover" />
                     ) : (
                       task.reporter.name.charAt(0).toUpperCase()
                     )}
                   </div>
                   <div className="truncate">
-                    <div className="text-xs font-bold text-primary">{task.reporter.name}</div>
-                    <div className="text-[10px] text-muted truncate">{task.reporter.email}</div>
+                    <div className="text-sm font-bold text-primary">{task.reporter.name}</div>
+                    <div className="text-xs text-muted truncate">{task.reporter.email}</div>
                   </div>
                 </div>
               ) : (
