@@ -2465,8 +2465,39 @@ export function AttendancePage() {
       {/* MODAL 0b: OFFICE IDLE END-OF-DAY COUNTDOWN                          */}
       {/* ─────────────────────────────────────────────────────────────────── */}
       {showIdleEndModal && createPortal(
-        <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-card border border-rose-500/40 rounded-3xl shadow-2xl shadow-rose-500/20 p-7 space-y-5 animate-in zoom-in-95 duration-300">
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: "100vw",
+            height: "100vh",
+            backgroundColor: "rgba(0, 0, 0, 0.72)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            zIndex: 99999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+        >
+          <div
+            className="modal"
+            style={{
+              background: "var(--bg-surface, #ffffff)",
+              border: "1px solid rgba(244, 63, 94, 0.4)",
+              borderRadius: "24px",
+              boxShadow: "0 25px 60px -15px rgba(244, 63, 94, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08)",
+              width: "100%",
+              maxWidth: "460px",
+              padding: "28px",
+              animation: "slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
+          >
             <div className="text-center">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 mb-4">
                 <Clock size={28} className="text-rose-400" />
