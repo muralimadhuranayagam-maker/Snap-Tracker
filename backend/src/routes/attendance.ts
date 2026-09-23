@@ -60,12 +60,21 @@ router.get('/today', async (req, res, next) => {
 
     const activeInterval = record.intervals.find((i) => i.status === 'ACTIVE') || null;
 
-    if (record.currentState === 'WORKING' && record.lastFaceDetectedAt) {
-      const elapsedSinceDetection = Math.max(
-        0,
-        Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
-      );
-      verifiedWorkingSeconds += elapsedSinceDetection;
+    const isOfficeMode = record.workMode === 'OFFICE';
+    if (record.currentState === 'WORKING') {
+      if (isOfficeMode && record.lastWorkResumedAt) {
+        const elapsedSinceResumed = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(record.lastWorkResumedAt).getTime()) / 1000)
+        );
+        verifiedWorkingSeconds += elapsedSinceResumed;
+      } else if (!isOfficeMode && record.lastFaceDetectedAt) {
+        const elapsedSinceDetection = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
+        );
+        verifiedWorkingSeconds += elapsedSinceDetection;
+      }
     } else if (record.currentState === 'FACE_NOT_DETECTED' && record.lastFaceLostAt) {
       const elapsedSinceLost = Math.max(
         0,
@@ -131,12 +140,13 @@ router.get('/today', async (req, res, next) => {
 });
 
 // ─── POST /api/attendance/mark ──────────────────────────────────────────────
-// Employee marks their daily attendance
+// Employee marks their daily attendance. Accepts optional workMode ("WFH" | "OFFICE")
 router.post('/mark', async (req, res, next) => {
   try {
     const userId = req.user!.id;
     const todayStr = getTodayDateString();
     const now = new Date();
+    const workMode: string = (req.body?.workMode === 'OFFICE') ? 'OFFICE' : 'WFH';
 
     let record = await prisma.attendanceRecord.findUnique({
       where: {
@@ -161,6 +171,7 @@ router.post('/mark', async (req, res, next) => {
         status: 'PRESENT',
         currentState: 'ATTENDANCE_MARKED',
         attendanceMarkedAt: now,
+        workMode,
       },
       include: {
         user: {
@@ -181,7 +192,7 @@ router.post('/mark', async (req, res, next) => {
         date: todayStr,
         type: 'ATTENDANCE_MARKED',
         timestamp: now,
-        metadata: JSON.stringify({ markedAt: now.toISOString() }),
+        metadata: JSON.stringify({ markedAt: now.toISOString(), workMode }),
       },
     });
 
@@ -198,6 +209,56 @@ router.post('/mark', async (req, res, next) => {
     next(err);
   }
 });
+
+// ─── POST /api/attendance/set-work-mode ──────────────────────────────────────
+// Super Admin only: Change workMode for an employee's today record
+router.post('/set-work-mode', requireRole('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const { targetUserId, workMode } = req.body;
+    if (!targetUserId || !workMode || !['OFFICE', 'WFH'].includes(workMode)) {
+      throw new AppError('targetUserId and workMode (OFFICE|WFH) are required', 400);
+    }
+    const todayStr = getTodayDateString();
+    const now = new Date();
+
+    const record = await prisma.attendanceRecord.findUnique({
+      where: { userId_date: { userId: targetUserId, date: todayStr } },
+    });
+
+    if (!record) {
+      throw new AppError('No attendance record found for that employee today', 404);
+    }
+
+    if (record.isCompleted) {
+      throw new AppError('Cannot change work mode after workday is completed', 400);
+    }
+
+    const updated = await prisma.attendanceRecord.update({
+      where: { id: record.id },
+      data: { workMode },
+    });
+
+    await prisma.attendanceEvent.create({
+      data: {
+        userId: targetUserId,
+        date: todayStr,
+        type: 'WORK_MODE_CHANGED',
+        timestamp: now,
+        metadata: JSON.stringify({ by: req.user!.id, workMode }),
+      },
+    });
+
+    broadcast({
+      type: 'ATTENDANCE_STATE_CHANGED',
+      payload: { record: updated },
+    });
+
+    res.json({ message: `Work mode changed to ${workMode}`, record: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 
 // ─── POST /api/attendance/start-work ────────────────────────────────────────
 // Employee starts working session (requires camera consent from client)
@@ -273,14 +334,18 @@ router.post('/start-work', async (req, res, next) => {
     });
 
     // Update attendance record
+    // For OFFICE mode: no face presence tracking, use lastWorkResumedAt for timer
+    // For WFH mode: use lastFaceDetectedAt for face-presence timer
+    const isOfficeMode = record.workMode === 'OFFICE';
     const updatedRecord = await prisma.attendanceRecord.update({
       where: { id: record.id },
       data: {
         currentState: 'WORKING',
         clockIn: record.clockIn || now,
         workStartedAt: record.workStartedAt || now,
-        lastFaceDetectedAt: now,
+        lastFaceDetectedAt: isOfficeMode ? null : now,
         lastFaceLostAt: null,
+        lastWorkResumedAt: isOfficeMode ? now : null,
       },
       include: {
         user: {
@@ -560,23 +625,33 @@ router.post('/break-start', async (req, res, next) => {
       throw new AppError('No active attendance record found to pause for break', 400);
     }
 
-    if (record.currentState !== 'WORKING' && record.currentState !== 'FACE_NOT_DETECTED') {
-      throw new AppError(`Cannot take break while in state: ${record.currentState}`, 400);
-    }
-
-    // Accumulate any pending working seconds if transitioning from WORKING
+    // Accumulate any pending working seconds before transitioning to break
     let finalVerified = record.verifiedWorkingSeconds;
-    if (record.currentState === 'WORKING' && record.lastFaceDetectedAt) {
-      const delta = Math.max(
-        0,
-        Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
-      );
-      finalVerified += delta;
+    const isOfficeMode = record.workMode === 'OFFICE';
+
+    if (isOfficeMode) {
+      // OFFICE: accumulate from lastWorkResumedAt button timestamp
+      if (record.currentState === 'WORKING' && record.lastWorkResumedAt) {
+        const delta = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(record.lastWorkResumedAt).getTime()) / 1000)
+        );
+        finalVerified += delta;
+      }
+    } else {
+      // WFH: accumulate from face detection timestamps
+      if (record.currentState === 'WORKING' && record.lastFaceDetectedAt) {
+        const delta = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
+        );
+        finalVerified += delta;
+      }
     }
 
-    // Accumulate any missing seconds if transitioning from FACE_NOT_DETECTED
+    // Accumulate any missing seconds if transitioning from FACE_NOT_DETECTED (WFH only)
     let finalMissing = record.faceMissingSeconds;
-    if (record.currentState === 'FACE_NOT_DETECTED' && record.lastFaceLostAt) {
+    if (!isOfficeMode && record.currentState === 'FACE_NOT_DETECTED' && record.lastFaceLostAt) {
       const delta = Math.max(
         0,
         Math.floor((now.getTime() - new Date(record.lastFaceLostAt).getTime()) / 1000)
@@ -614,6 +689,7 @@ router.post('/break-start', async (req, res, next) => {
         faceMissingSeconds: finalMissing,
         lastFaceDetectedAt: null,
         lastFaceLostAt: null,
+        lastWorkResumedAt: null,
       },
       include: { intervals: true },
     });
@@ -691,13 +767,15 @@ router.post('/break-end', async (req, res, next) => {
       },
     });
 
+    const isOfficeModeBreak = record.workMode === 'OFFICE';
     const updated = await prisma.attendanceRecord.update({
       where: { id: record.id },
       data: {
         currentState: 'WORKING',
         breakSeconds: record.breakSeconds + breakDuration,
-        lastFaceDetectedAt: now,
+        lastFaceDetectedAt: isOfficeModeBreak ? null : now,
         lastFaceLostAt: null,
+        lastWorkResumedAt: isOfficeModeBreak ? now : null,
       },
       include: { intervals: true },
     });
@@ -762,17 +840,29 @@ router.post('/lunch-start', async (req, res, next) => {
       throw new AppError(`Cannot start lunch while in state: ${record.currentState}`, 400);
     }
 
+    const isOfficeModeL = record.workMode === 'OFFICE';
     let finalVerified = record.verifiedWorkingSeconds;
-    if (record.currentState === 'WORKING' && record.lastFaceDetectedAt) {
-      const delta = Math.max(
-        0,
-        Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
-      );
-      finalVerified += delta;
+
+    if (isOfficeModeL) {
+      if (record.currentState === 'WORKING' && record.lastWorkResumedAt) {
+        const delta = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(record.lastWorkResumedAt).getTime()) / 1000)
+        );
+        finalVerified += delta;
+      }
+    } else {
+      if (record.currentState === 'WORKING' && record.lastFaceDetectedAt) {
+        const delta = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
+        );
+        finalVerified += delta;
+      }
     }
 
     let finalMissing = record.faceMissingSeconds;
-    if (record.currentState === 'FACE_NOT_DETECTED' && record.lastFaceLostAt) {
+    if (!isOfficeModeL && record.currentState === 'FACE_NOT_DETECTED' && record.lastFaceLostAt) {
       const delta = Math.max(
         0,
         Math.floor((now.getTime() - new Date(record.lastFaceLostAt).getTime()) / 1000)
@@ -810,6 +900,7 @@ router.post('/lunch-start', async (req, res, next) => {
         faceMissingSeconds: finalMissing,
         lastFaceDetectedAt: null,
         lastFaceLostAt: null,
+        lastWorkResumedAt: null,
       },
       include: { intervals: true },
     });
@@ -887,13 +978,15 @@ router.post('/lunch-end', async (req, res, next) => {
       },
     });
 
+    const isOfficeModeL2 = record.workMode === 'OFFICE';
     const updated = await prisma.attendanceRecord.update({
       where: { id: record.id },
       data: {
         currentState: 'WORKING',
         lunchSeconds: record.lunchSeconds + lunchDuration,
-        lastFaceDetectedAt: now,
+        lastFaceDetectedAt: isOfficeModeL2 ? null : now,
         lastFaceLostAt: null,
+        lastWorkResumedAt: isOfficeModeL2 ? now : null,
       },
       include: { intervals: true },
     });
@@ -960,18 +1053,29 @@ router.post('/meeting-start', async (req, res, next) => {
       throw new AppError(`Cannot start meeting while in state: ${record.currentState}`, 400);
     }
 
-    // Accumulate pending face-verified working seconds before switching to meeting
+    // Accumulate pending working seconds before switching to meeting
+    const isOfficeModeM = record.workMode === 'OFFICE';
     let finalVerified = record.verifiedWorkingSeconds;
-    if (record.currentState === 'WORKING' && record.lastFaceDetectedAt) {
-      const delta = Math.max(
-        0,
-        Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
-      );
-      finalVerified += delta;
+    if (isOfficeModeM) {
+      if (record.currentState === 'WORKING' && record.lastWorkResumedAt) {
+        const delta = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(record.lastWorkResumedAt).getTime()) / 1000)
+        );
+        finalVerified += delta;
+      }
+    } else {
+      if (record.currentState === 'WORKING' && record.lastFaceDetectedAt) {
+        const delta = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
+        );
+        finalVerified += delta;
+      }
     }
 
     let finalMissing = record.faceMissingSeconds;
-    if (record.currentState === 'FACE_NOT_DETECTED' && record.lastFaceLostAt) {
+    if (!isOfficeModeM && record.currentState === 'FACE_NOT_DETECTED' && record.lastFaceLostAt) {
       const delta = Math.max(
         0,
         Math.floor((now.getTime() - new Date(record.lastFaceLostAt).getTime()) / 1000)
@@ -1009,6 +1113,7 @@ router.post('/meeting-start', async (req, res, next) => {
         faceMissingSeconds: finalMissing,
         lastFaceDetectedAt: null,
         lastFaceLostAt: null,
+        lastWorkResumedAt: null,
       },
       include: { intervals: true },
     });
@@ -1089,14 +1194,16 @@ router.post('/meeting-end', async (req, res, next) => {
     });
 
     // Meeting duration counts directly as verified working time!
+    const isOfficeModeM2 = record.workMode === 'OFFICE';
     const updated = await prisma.attendanceRecord.update({
       where: { id: record.id },
       data: {
         currentState: 'WORKING',
         meetingSeconds: (record.meetingSeconds || 0) + meetingDuration,
         verifiedWorkingSeconds: record.verifiedWorkingSeconds + meetingDuration,
-        lastFaceDetectedAt: now,
+        lastFaceDetectedAt: isOfficeModeM2 ? null : now,
         lastFaceLostAt: null,
+        lastWorkResumedAt: isOfficeModeM2 ? now : null,
       },
       include: { intervals: true },
     });
@@ -1174,12 +1281,21 @@ router.post('/end-workday', async (req, res, next) => {
 
     const activeInterval = record.intervals[0] || null;
 
-    if (record.currentState === 'WORKING' && record.lastFaceDetectedAt) {
-      const delta = Math.max(
-        0,
-        Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
-      );
-      finalVerified += delta;
+    const isOfficeMode = record.workMode === 'OFFICE';
+    if (record.currentState === 'WORKING') {
+      if (isOfficeMode && record.lastWorkResumedAt) {
+        const delta = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(record.lastWorkResumedAt).getTime()) / 1000)
+        );
+        finalVerified += delta;
+      } else if (!isOfficeMode && record.lastFaceDetectedAt) {
+        const delta = Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(record.lastFaceDetectedAt).getTime()) / 1000)
+        );
+        finalVerified += delta;
+      }
     } else if (record.currentState === 'FACE_NOT_DETECTED' && record.lastFaceLostAt) {
       const delta = Math.max(
         0,
@@ -1575,13 +1691,23 @@ router.get('/admin/activity', requireRole('SUPER_ADMIN'), async (req, res, next)
       const isRecentActivity = Boolean(lastAct && (now.getTime() - lastAct.getTime() < 600 * 1000));
       const isOnline = isShiftActive || isRecentActivity;
 
+      let verifiedWorkingSeconds = att?.verifiedWorkingSeconds || 0;
+      if (att && att.currentState === 'WORKING') {
+        if (att.workMode === 'OFFICE' && att.lastWorkResumedAt) {
+          verifiedWorkingSeconds += Math.max(0, Math.floor((now.getTime() - new Date(att.lastWorkResumedAt).getTime()) / 1000));
+        } else if (att.workMode !== 'OFFICE' && att.lastFaceDetectedAt) {
+          verifiedWorkingSeconds += Math.max(0, Math.floor((now.getTime() - new Date(att.lastFaceDetectedAt).getTime()) / 1000));
+        }
+      }
+
       return {
         user,
+        workMode: att?.workMode || 'WFH',
         attendanceStatus: att?.status || 'ABSENT',
         currentState: att?.currentState || 'OFF_DUTY',
         clockIn: att?.clockIn || null,
         clockOut: att?.clockOut || null,
-        verifiedWorkingSeconds: att?.verifiedWorkingSeconds || 0,
+        verifiedWorkingSeconds,
         breakSeconds: att?.breakSeconds || 0,
         lunchSeconds: att?.lunchSeconds || 0,
         meetingSeconds: att?.meetingSeconds || 0,
@@ -1667,6 +1793,7 @@ router.get('/admin/employee/:id', requireRole('SUPER_ADMIN'), async (req, res, n
       date: dateStr,
       officialAttendance: {
         hasRecord: Boolean(record),
+        workMode: record?.workMode || 'WFH',
         status: record?.status || 'ABSENT',
         currentState: record?.currentState || 'OFF_DUTY',
         clockIn: record?.clockIn || null,

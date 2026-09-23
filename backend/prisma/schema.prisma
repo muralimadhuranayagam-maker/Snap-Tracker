@@ -855,7 +855,8 @@ model AttendanceRecord {
   userId                  String
   date                    String               // YYYY-MM-DD
   status                  String               @default("PRESENT") // PRESENT, ABSENT, HALF_DAY
-  currentState            String               @default("ATTENDANCE_MARKED") // OFF_DUTY, ATTENDANCE_MARKED, WORKING, FACE_NOT_DETECTED, ON_BREAK, ON_LUNCH, WORKDAY_COMPLETED
+  currentState            String               @default("ATTENDANCE_MARKED") // OFF_DUTY, ATTENDANCE_MARKED, WORKING, FACE_NOT_DETECTED, IN_MEETING, ON_BREAK, ON_LUNCH, WORKDAY_COMPLETED
+  workMode                String               @default("WFH") // WFH or OFFICE
   clockIn                 DateTime?
   clockOut                DateTime?
   attendanceMarkedAt      DateTime             @default(now())
@@ -863,6 +864,7 @@ model AttendanceRecord {
   workEndedAt             DateTime?
   lastFaceDetectedAt      DateTime?
   lastFaceLostAt          DateTime?
+  lastWorkResumedAt       DateTime?            // OFFICE mode: tracks when WORKING state last began
   totalAttendanceSeconds  Int                  @default(0)
   verifiedWorkingSeconds  Int                  @default(0)
   breakSeconds            Int                  @default(0)
@@ -882,6 +884,7 @@ model AttendanceRecord {
   @@index([date])
   @@index([status])
   @@index([currentState])
+  @@index([workMode])
 }
 
 model AttendanceInterval {

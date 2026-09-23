@@ -30,7 +30,10 @@ import {
   RefreshCw,
   Monitor,
   VideoOff,
+  Building2,
+  Home,
 } from 'lucide-react';
+import { WorkModeSelectionModal } from '../components/attendance/WorkModeSelectionModal';
 import toast from 'react-hot-toast';
 
 // Format seconds into HH:MM:SS
@@ -149,6 +152,16 @@ export function AttendancePage() {
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [showEndConfirmModal, setShowEndConfirmModal] = useState(false);
 
+  // Work Mode Selection Modal state (once per day)
+  const [showWorkModeModal, setShowWorkModeModal] = useState(false);
+
+  // Office mode: auto end-of-day idle detection state
+  const [showIdleEndModal, setShowIdleEndModal] = useState(false);
+  const [idleCountdown, setIdleCountdown] = useState(120); // 2 minutes
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+
   // Multi-tab collision state
   const [multiTabConflict, setMultiTabConflict] = useState(false);
 
@@ -157,6 +170,7 @@ export function AttendancePage() {
   const [adminDateFilter, setAdminDateFilter] = useState<string>(new Date().toISOString().split('T')[0]);
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [adminStatusFilter, setAdminStatusFilter] = useState<string>('ALL');
+  const [adminWorkModeFilter, setAdminWorkModeFilter] = useState<'ALL' | 'WFH' | 'OFFICE'>('ALL');
 
   // Employee history filter
   const [historyRange, setHistoryRange] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
@@ -178,6 +192,8 @@ export function AttendancePage() {
   const currentState = todayData?.currentState || 'OFF_DUTY';
   const isMarked = Boolean(record);
   const isCompleted = record?.isCompleted || currentState === 'WORKDAY_COMPLETED';
+  const workMode: 'OFFICE' | 'WFH' = record?.workMode === 'OFFICE' ? 'OFFICE' : 'WFH';
+  const isOfficeMode = workMode === 'OFFICE';
 
   // Live timer accumulators
   const [liveWorkingSec, setLiveWorkingSec] = useState(0);
@@ -201,21 +217,35 @@ export function AttendancePage() {
   // Real-time second accumulator (interpolates from authoritative backend baseline)
   useEffect(() => {
     const timer = setInterval(() => {
-      // Only count working seconds when camera is active AND face is detected
-      if (currentState === 'WORKING' && isFaceDetected && isVideoActive) {
-        setLiveWorkingSec((prev) => prev + 1);
-      } else if (currentState === 'WORKING' && !isVideoActive) {
-        // Camera is off while state says WORKING — count as face missing
-        setLiveMissingSec((prev) => prev + 1);
-      } else if (currentState === 'FACE_NOT_DETECTED') {
-        setLiveMissingSec((prev) => prev + 1);
-      } else if (currentState === 'ON_BREAK') {
-        setLiveBreakSec((prev) => prev + 1);
-      } else if (currentState === 'ON_LUNCH') {
-        setLiveLunchSec((prev) => prev + 1);
-      } else if (currentState === 'IN_MEETING') {
-        setLiveMeetingSec((prev) => prev + 1);
-        setLiveWorkingSec((prev) => prev + 1); // Crucial: Meeting duration adds directly to verified working hours!
+      if (isOfficeMode) {
+        // OFFICE MODE: Count working time whenever state is WORKING or IN_MEETING (no face check)
+        if (currentState === 'WORKING' || currentState === 'IN_MEETING') {
+          setLiveWorkingSec((prev) => prev + 1);
+          if (currentState === 'IN_MEETING') {
+            setLiveMeetingSec((prev) => prev + 1);
+          }
+        } else if (currentState === 'ON_BREAK') {
+          setLiveBreakSec((prev) => prev + 1);
+        } else if (currentState === 'ON_LUNCH') {
+          setLiveLunchSec((prev) => prev + 1);
+        }
+      } else {
+        // WFH MODE: Count working seconds when camera is active AND face is detected
+        if (currentState === 'WORKING' && isFaceDetected && isVideoActive) {
+          setLiveWorkingSec((prev) => prev + 1);
+        } else if (currentState === 'WORKING' && !isVideoActive) {
+          // Camera is off while state says WORKING — count as face missing
+          setLiveMissingSec((prev) => prev + 1);
+        } else if (currentState === 'FACE_NOT_DETECTED') {
+          setLiveMissingSec((prev) => prev + 1);
+        } else if (currentState === 'ON_BREAK') {
+          setLiveBreakSec((prev) => prev + 1);
+        } else if (currentState === 'ON_LUNCH') {
+          setLiveLunchSec((prev) => prev + 1);
+        } else if (currentState === 'IN_MEETING') {
+          setLiveMeetingSec((prev) => prev + 1);
+          setLiveWorkingSec((prev) => prev + 1); // Meeting duration adds directly to verified working hours!
+        }
       }
 
       if (record?.clockIn && !isCompleted) {
@@ -224,7 +254,7 @@ export function AttendancePage() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentState, isFaceDetected, isVideoActive, record?.clockIn, isCompleted]);
+  }, [currentState, isFaceDetected, isVideoActive, record?.clockIn, isCompleted, isOfficeMode]);
 
   // Attach live video preview to visible video element on AttendancePage
   useEffect(() => {
@@ -261,8 +291,8 @@ export function AttendancePage() {
 
   // Mark Attendance
   const markAttendanceMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.post('/attendance/mark');
+    mutationFn: async (vars?: { workMode?: 'OFFICE' | 'WFH' }) => {
+      const res = await api.post('/attendance/mark', vars?.workMode ? { workMode: vars.workMode } : {});
       return res.data;
     },
     onSuccess: async () => {
@@ -272,6 +302,23 @@ export function AttendancePage() {
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.error || 'Failed to mark attendance');
+    },
+  });
+
+  // Super Admin: Change an employee's work mode for today
+  const changeWorkModeMutation = useMutation({
+    mutationFn: async ({ targetUserId, workMode }: { targetUserId: string; workMode: 'OFFICE' | 'WFH' }) => {
+      const res = await api.post('/attendance/set-work-mode', { targetUserId, workMode });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Work mode updated');
+      queryClient.invalidateQueries({ queryKey: ['admin-activity'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-employee-details', selectedAdminEmployeeId] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Failed to update work mode');
     },
   });
 
@@ -330,8 +377,12 @@ export function AttendancePage() {
           },
         };
       });
-      const ok = await startCamera();
-      if (ok) {
+      if (!isOfficeMode) {
+        const ok = await startCamera();
+        if (ok) {
+          globalActivityTracker.start();
+        }
+      } else {
         globalActivityTracker.start();
       }
       refetchToday();
@@ -379,8 +430,12 @@ export function AttendancePage() {
           },
         };
       });
-      const ok = await startCamera();
-      if (ok) {
+      if (!isOfficeMode) {
+        const ok = await startCamera();
+        if (ok) {
+          globalActivityTracker.start();
+        }
+      } else {
         globalActivityTracker.start();
       }
       refetchToday();
@@ -428,8 +483,12 @@ export function AttendancePage() {
           },
         };
       });
-      const ok = await startCamera();
-      if (ok) {
+      if (!isOfficeMode) {
+        const ok = await startCamera();
+        if (ok) {
+          globalActivityTracker.start();
+        }
+      } else {
         globalActivityTracker.start();
       }
       refetchToday();
@@ -460,12 +519,17 @@ export function AttendancePage() {
   });
 
   // Ensure camera is unconditionally stopped during pause states (Break, Lunch, Meeting, Completed, Off Duty)
+  // For OFFICE mode: NEVER start the camera for any state
   useEffect(() => {
+    if (isOfficeMode) {
+      stopCamera();
+      return;
+    }
     const isPausedState = ['ON_BREAK', 'ON_LUNCH', 'IN_MEETING', 'WORKDAY_COMPLETED', 'OFF_DUTY', 'ATTENDANCE_MARKED'].includes(currentState);
     if (isPausedState) {
       stopCamera();
     }
-  }, [currentState, stopCamera]);
+  }, [currentState, stopCamera, isOfficeMode]);
 
   const handleTakeBreak = () => {
     queryClient.setQueryData(['attendance-today'], (prev: any) => {
@@ -519,17 +583,81 @@ export function AttendancePage() {
     endWorkdayMutation.mutate();
   };
 
-  // Only on initial mount: If employee was already in WORKING state from a prior session, initialize camera
+  // Only on initial mount: If WFH employee was already in WORKING state, initialize camera
   const hasInitialAutoStartedRef = useRef(false);
   useEffect(() => {
-    if (!hasInitialAutoStartedRef.current && currentState === 'WORKING' && !isVideoActive && !isSuperAdmin) {
+    if (!hasInitialAutoStartedRef.current && currentState === 'WORKING' && !isVideoActive && !isSuperAdmin && !isOfficeMode) {
       hasInitialAutoStartedRef.current = true;
       startCamera().catch(() => {});
     }
-  }, [currentState, isVideoActive, isSuperAdmin, startCamera]);
+  }, [currentState, isVideoActive, isSuperAdmin, startCamera, isOfficeMode]);
+
+  // Office mode: Auto end-of-day idle detection (30 min after 7pm → 2-min countdown)
+  useEffect(() => {
+    if (!isOfficeMode || isCompleted || isSuperAdmin) return;
+
+    const checkIdleInterval = setInterval(() => {
+      const now = new Date();
+      const hour = now.getHours();
+      if (hour < 19) return; // Only activate after 7pm
+
+      const idleSinceMs = Date.now() - lastActivityRef.current;
+      const idleThresholdMs = 30 * 60 * 1000; // 30 minutes
+
+      if (idleSinceMs >= idleThresholdMs && !showIdleEndModal && !isCompleted) {
+        setShowIdleEndModal(true);
+        setIdleCountdown(120);
+      }
+    }, 60000); // Check every minute
+
+    // Track activity from globalActivityTracker
+    const activityHandler = () => {
+      lastActivityRef.current = Date.now();
+      if (showIdleEndModal) {
+        // Reset if user interacts
+        if (idleCountdownRef.current) clearInterval(idleCountdownRef.current);
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        setShowIdleEndModal(false);
+      }
+    };
+
+    window.addEventListener('mousemove', activityHandler, { passive: true });
+    window.addEventListener('keydown', activityHandler, { passive: true });
+
+    return () => {
+      clearInterval(checkIdleInterval);
+      window.removeEventListener('mousemove', activityHandler);
+      window.removeEventListener('keydown', activityHandler);
+    };
+  }, [isOfficeMode, isCompleted, isSuperAdmin, showIdleEndModal]);
+
+  // Idle countdown timer
+  useEffect(() => {
+    if (!showIdleEndModal) return;
+    setIdleCountdown(120);
+    idleCountdownRef.current = setInterval(() => {
+      setIdleCountdown((prev) => {
+        if (prev <= 1) {
+          // Auto end workday
+          clearInterval(idleCountdownRef.current!);
+          setShowIdleEndModal(false);
+          endWorkdayMutation.mutate();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (idleCountdownRef.current) clearInterval(idleCountdownRef.current);
+    };
+  }, [showIdleEndModal]);
 
   const handleAllowCameraAndStartWorking = async () => {
     setShowConsentModal(false);
+    if (isOfficeMode) {
+      startWorkingMutation.mutate();
+      return;
+    }
     const cameraGranted = await startCamera();
     if (cameraGranted) {
       startWorkingMutation.mutate();
@@ -537,21 +665,16 @@ export function AttendancePage() {
   };
 
   const handleStartOrResumeWorking = async () => {
-    if (currentState === 'OFF_DUTY') {
-      markAttendanceMutation.mutate(undefined, {
-        onSuccess: async () => {
-          const ok = await startCamera();
-          if (ok) {
-            startWorkingMutation.mutate();
-          }
-        },
-      });
+    if (currentState === 'OFF_DUTY' || !isMarked) {
+      setShowWorkModeModal(true);
       return;
     }
     if (currentState === 'ATTENDANCE_MARKED') {
-      const ok = await startCamera();
-      if (ok) {
+      if (isOfficeMode) {
         startWorkingMutation.mutate();
+      } else {
+        const ok = await startCamera();
+        if (ok) startWorkingMutation.mutate();
       }
       return;
     }
@@ -567,10 +690,29 @@ export function AttendancePage() {
       meetingEndMutation.mutate();
       return;
     }
-    // For WORKING or FACE_NOT_DETECTED: ensure camera is on and active
-    const ok = await startCamera();
-    if (ok) {
-      startWorkingMutation.mutate();
+    // For WORKING or FACE_NOT_DETECTED: ensure camera is on and active (WFH only)
+    if (!isOfficeMode) {
+      const ok = await startCamera();
+      if (ok) startWorkingMutation.mutate();
+    }
+  };
+
+  // Handle work mode selection from modal
+  const handleWorkModeSelected = async (mode: 'OFFICE' | 'WFH') => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const modalKey = `work_mode_modal_shown_${currentUser?.id}_${todayStr}`;
+    localStorage.setItem(modalKey, 'true');
+    setShowWorkModeModal(false);
+
+    markAttendanceMutation.mutate({ workMode: mode });
+  };
+
+  // Override mark attendance mutation to always show work mode modal
+  const handleMarkAttendance = () => {
+    if (!isMarked) {
+      setShowWorkModeModal(true);
+    } else {
+      markAttendanceMutation.mutate();
     }
   };
 
@@ -1134,9 +1276,12 @@ export function AttendancePage() {
         item.user.email.toLowerCase().includes(adminSearchQuery.toLowerCase());
       const matchesStatus =
         adminStatusFilter === 'ALL' || item.currentState === adminStatusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesWorkMode =
+        adminWorkModeFilter === 'ALL' ||
+        (item.workMode || 'WFH') === adminWorkModeFilter;
+      return matchesSearch && matchesStatus && matchesWorkMode;
     });
-  }, [adminActivityData, adminSearchQuery, adminStatusFilter]);
+  }, [adminActivityData, adminSearchQuery, adminStatusFilter, adminWorkModeFilter]);
 
   // State badge styling
   const getStateBadge = (state: string) => {
@@ -1224,7 +1369,9 @@ export function AttendancePage() {
             <p className="text-xs text-muted-foreground mt-0.5">
               {isSuperAdmin
                 ? 'Super Admin view: Mark attendance & monitor organization activity. Camera tracking exempt.'
-                : 'Working hours are calculated from Face-Presence Detection & Meetings. Remains active across background tabs.'}
+                : isOfficeMode
+                  ? 'Office Mode — Working hours tracked by session activity. No camera required. Screen & activity monitoring active.'
+                  : 'WFH Mode — Working hours verified via Face-Presence Detection & Meetings. Camera stays active across all tabs.'}
             </p>
           </div>
         </div>
@@ -1291,8 +1438,8 @@ export function AttendancePage() {
         </div>
       )}
 
-      {/* Working but camera off notice */}
-      {!isSuperAdmin && currentState === 'WORKING' && !isVideoActive && (
+      {/* Working but camera off notice — WFH only */}
+      {!isSuperAdmin && !isOfficeMode && currentState === 'WORKING' && !isVideoActive && (
         <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-between gap-3 animate-in fade-in duration-200">
           <div className="flex items-center gap-2 text-xs">
             <AlertTriangle size={18} className="shrink-0" />
@@ -1305,6 +1452,16 @@ export function AttendancePage() {
             <Video size={13} />
             Turn On Camera
           </button>
+        </div>
+      )}
+
+      {/* Office mode status banner — shown when working in Office mode */}
+      {!isSuperAdmin && isOfficeMode && currentState === 'WORKING' && (
+        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-3 animate-in fade-in duration-200">
+          <Building2 size={18} className="shrink-0 text-amber-400" />
+          <div className="text-xs">
+            <span className="font-semibold">Office Mode Active</span> — Working hours are accumulated based on your session time. Activity & screen monitoring is running in the background.
+          </div>
         </div>
       )}
 
@@ -1342,7 +1499,7 @@ export function AttendancePage() {
             <div>
               {!isMarked ? (
                 <button
-                  onClick={() => markAttendanceMutation.mutate()}
+                  onClick={handleMarkAttendance}
                   disabled={markAttendanceMutation.isPending}
                   className="px-5 py-3 rounded-xl font-bold text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all flex items-center gap-2 shadow-md"
                 >
@@ -1412,13 +1569,24 @@ export function AttendancePage() {
 
               {!isMarked && (
                 <button
-                  onClick={() => markAttendanceMutation.mutate()}
+                  onClick={handleMarkAttendance}
                   disabled={markAttendanceMutation.isPending}
                   className="px-4 py-2.5 rounded-xl font-semibold text-xs bg-primary text-primary-foreground hover:bg-primary/90 transition-all flex items-center gap-2 shadow-sm"
                 >
                   <CheckCircle2 size={15} />
                   {markAttendanceMutation.isPending ? 'Marking...' : 'Mark Today Attendance'}
                 </button>
+              )}
+              {/* Work mode badge when marked */}
+              {isMarked && (
+                <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                  isOfficeMode
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                }`}>
+                  {isOfficeMode ? <Building2 size={12} /> : <Home size={12} />}
+                  {isOfficeMode ? 'Office' : 'WFH'}
+                </span>
               )}
             </div>
           </div>
@@ -1435,11 +1603,12 @@ export function AttendancePage() {
                 {getStateBadge(currentState)}
               </div>
 
-              {/* Large Face-Verified Working Timer */}
+              {/* Large Working Timer */}
               <div className="text-center py-6 px-4 rounded-xl bg-muted/20 border border-border/30 relative overflow-hidden">
                 <div className="text-xs font-semibold tracking-wider uppercase text-muted-foreground flex items-center justify-center gap-1.5">
-                  <ScanFace size={14} className="text-emerald-400" />
-                  Official Working Time (Face Presence & Meetings)
+                  {isOfficeMode
+                    ? <><Building2 size={14} className="text-amber-400" /> Official Working Time (Office Session)</>  
+                    : <><ScanFace size={14} className="text-emerald-400" /> Official Working Time (Face Presence &amp; Meetings)</>}
                 </div>
 
                 <div className="text-5xl sm:text-6xl font-extrabold font-mono tracking-tight text-foreground mt-3">
@@ -1448,53 +1617,92 @@ export function AttendancePage() {
 
                 {/* Grace Period / Status Subtitle */}
                 <div className="mt-3 text-xs font-medium min-h-[20px]">
-                  {currentState === 'WORKING' && isFaceDetected && (
-                    <span className="text-emerald-400 font-semibold inline-flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      Face Detected & working time accumulating (persists across tabs)
-                    </span>
-                  )}
-                  {currentState === 'WORKING' && !isFaceDetected && gracePeriodCountdown !== null && (
-                    <span className="text-amber-400 font-semibold inline-flex items-center gap-1">
-                      <AlertTriangle size={13} />
-                      Face lost. Grace period: {gracePeriodCountdown}s before timer pauses...
-                    </span>
-                  )}
-                  {currentState === 'FACE_NOT_DETECTED' && (
-                    <span className="text-amber-400 font-semibold inline-flex items-center gap-1">
-                      <PauseCircle size={13} />
-                      Working timer paused: Human face not detected in front of camera
-                    </span>
-                  )}
-                  {currentState === 'IN_MEETING' && (
-                    <span className="text-indigo-400 font-semibold inline-flex items-center gap-1.5">
-                      <Handshake size={14} />
-                      In Meeting — Camera is off to free your webcam. Meeting duration is added to working hours!
-                    </span>
-                  )}
-                  {currentState === 'ON_BREAK' && (
-                    <span className="text-blue-400 font-semibold inline-flex items-center gap-1">
-                      <Coffee size={13} />
-                      On Break (Camera off, does not count toward working hours)
-                    </span>
-                  )}
-                  {currentState === 'ON_LUNCH' && (
-                    <span className="text-purple-400 font-semibold inline-flex items-center gap-1">
-                      <UtensilsCrossed size={13} />
-                      On Lunch (Camera off, does not count toward working hours)
-                    </span>
-                  )}
-                  {currentState === 'WORKDAY_COMPLETED' && (
-                    <span className="text-muted-foreground font-semibold inline-flex items-center gap-1">
-                      <CheckCircle2 size={13} />
-                      Workday completed for today. Camera off.
-                    </span>
+                  {isOfficeMode ? (
+                    // OFFICE MODE status subtitles
+                    <>
+                      {currentState === 'WORKING' && (
+                        <span className="text-amber-400 font-semibold inline-flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                          Office session active — time accumulating based on activity
+                        </span>
+                      )}
+                      {currentState === 'IN_MEETING' && (
+                        <span className="text-indigo-400 font-semibold inline-flex items-center gap-1.5">
+                          <Handshake size={14} />
+                          In Meeting — Meeting duration is added to working hours!
+                        </span>
+                      )}
+                      {currentState === 'ON_BREAK' && (
+                        <span className="text-blue-400 font-semibold inline-flex items-center gap-1">
+                          <Coffee size={13} />
+                          On Break — Working timer paused
+                        </span>
+                      )}
+                      {currentState === 'ON_LUNCH' && (
+                        <span className="text-purple-400 font-semibold inline-flex items-center gap-1">
+                          <UtensilsCrossed size={13} />
+                          On Lunch — Working timer paused
+                        </span>
+                      )}
+                      {currentState === 'WORKDAY_COMPLETED' && (
+                        <span className="text-muted-foreground font-semibold inline-flex items-center gap-1">
+                          <CheckCircle2 size={13} />
+                          Workday completed for today.
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    // WFH MODE status subtitles
+                    <>
+                      {currentState === 'WORKING' && isFaceDetected && (
+                        <span className="text-emerald-400 font-semibold inline-flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                          Face Detected & working time accumulating (persists across tabs)
+                        </span>
+                      )}
+                      {currentState === 'WORKING' && !isFaceDetected && gracePeriodCountdown !== null && (
+                        <span className="text-amber-400 font-semibold inline-flex items-center gap-1">
+                          <AlertTriangle size={13} />
+                          Face lost. Grace period: {gracePeriodCountdown}s before timer pauses...
+                        </span>
+                      )}
+                      {currentState === 'FACE_NOT_DETECTED' && (
+                        <span className="text-amber-400 font-semibold inline-flex items-center gap-1">
+                          <PauseCircle size={13} />
+                          Working timer paused: Human face not detected in front of camera
+                        </span>
+                      )}
+                      {currentState === 'IN_MEETING' && (
+                        <span className="text-indigo-400 font-semibold inline-flex items-center gap-1.5">
+                          <Handshake size={14} />
+                          In Meeting — Camera is off to free your webcam. Meeting duration is added to working hours!
+                        </span>
+                      )}
+                      {currentState === 'ON_BREAK' && (
+                        <span className="text-blue-400 font-semibold inline-flex items-center gap-1">
+                          <Coffee size={13} />
+                          On Break (Camera off, does not count toward working hours)
+                        </span>
+                      )}
+                      {currentState === 'ON_LUNCH' && (
+                        <span className="text-purple-400 font-semibold inline-flex items-center gap-1">
+                          <UtensilsCrossed size={13} />
+                          On Lunch (Camera off, does not count toward working hours)
+                        </span>
+                      )}
+                      {currentState === 'WORKDAY_COMPLETED' && (
+                        <span className="text-muted-foreground font-semibold inline-flex items-center gap-1">
+                          <CheckCircle2 size={13} />
+                          Workday completed for today. Camera off.
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
 
               {/* Secondary Official Metric Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center">
+              <div className={`grid grid-cols-2 ${isOfficeMode ? 'sm:grid-cols-4' : 'sm:grid-cols-5'} gap-2.5 text-center`}>
                 <div className="p-3 rounded-xl bg-muted/30 border border-border/30">
                   <div className="text-[11px] text-muted-foreground font-medium">Total Attendance</div>
                   <div className="text-base font-bold font-mono text-foreground mt-1">
@@ -1523,12 +1731,14 @@ export function AttendancePage() {
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-muted/30 border border-border/30">
-                  <div className="text-[11px] text-muted-foreground font-medium">Face Missing</div>
-                  <div className="text-base font-bold font-mono text-amber-400 mt-1">
-                    {formatDuration(liveMissingSec)}
+                {!isOfficeMode && (
+                  <div className="p-3 rounded-xl bg-muted/30 border border-border/30">
+                    <div className="text-[11px] text-muted-foreground font-medium">Face Missing</div>
+                    <div className="text-base font-bold font-mono text-amber-400 mt-1">
+                      {formatDuration(liveMissingSec)}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Action Buttons */}
@@ -1536,7 +1746,7 @@ export function AttendancePage() {
                 {/* 1. OFF_DUTY */}
                 {currentState === 'OFF_DUTY' && (
                   <button
-                    onClick={() => markAttendanceMutation.mutate()}
+                    onClick={handleMarkAttendance}
                     disabled={markAttendanceMutation.isPending}
                     className="w-full py-3 rounded-xl font-bold text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
@@ -1667,7 +1877,7 @@ export function AttendancePage() {
                         className="w-full py-2.5 px-4 rounded-xl font-bold text-xs bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 transition-all flex items-center justify-center gap-2"
                       >
                         <Play size={14} className="fill-indigo-300" />
-                        End Meeting & Resume Working (Turns Face Camera On)
+                        End Meeting & Resume Working{!isOfficeMode && ' (Turns Face Camera On)'}
                       </button>
                     )}
 
@@ -1678,7 +1888,7 @@ export function AttendancePage() {
                         className="w-full py-2.5 px-4 rounded-xl font-bold text-xs bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 border border-blue-500/30 transition-all flex items-center justify-center gap-2"
                       >
                         <Play size={14} className="fill-blue-300" />
-                        End Break & Resume Working (Turns Face Camera On)
+                        End Break & Resume Working{!isOfficeMode && ' (Turns Face Camera On)'}
                       </button>
                     )}
 
@@ -1689,7 +1899,7 @@ export function AttendancePage() {
                         className="w-full py-2.5 px-4 rounded-xl font-bold text-xs bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 transition-all flex items-center justify-center gap-2"
                       >
                         <Play size={14} className="fill-purple-300" />
-                        End Lunch & Resume Working (Turns Face Camera On)
+                        End Lunch & Resume Working{!isOfficeMode && ' (Turns Face Camera On)'}
                       </button>
                     )}
                   </div>
@@ -1704,105 +1914,185 @@ export function AttendancePage() {
               </div>
             </div>
 
-            {/* Right: Camera / Face Presence Monitoring Card */}
-            <div className="bg-card border border-border/40 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Video size={18} className="text-primary" />
-                  <span className="font-bold text-sm">Face Verification Feed</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-[11px] font-mono font-medium px-2 py-0.5 rounded ${
-                      isVideoActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {isVideoActive ? 'Camera Live' : 'Camera Off'}
+            {/* Right: Office Status Panel OR WFH Camera Panel */}
+            {isOfficeMode ? (
+              // OFFICE MODE: Activity status panel (no camera)
+              <div className="bg-card border border-amber-500/20 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Building2 size={18} className="text-amber-400" />
+                    <span className="font-bold text-sm">Office Mode Status</span>
+                  </div>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                    No Camera Required
                   </span>
                 </div>
-              </div>
 
-              {/* Video Player Box */}
-              <div className="relative w-full aspect-video rounded-xl bg-black/60 border border-border/40 overflow-hidden flex items-center justify-center">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={`w-full h-full object-cover transform -scale-x-100 ${
-                    isVideoActive ? 'opacity-100' : 'hidden'
-                  }`}
-                />
-
-                {!isVideoActive && (
-                  <div className="text-center p-4 space-y-2">
-                    <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center mx-auto text-muted-foreground">
-                      <CameraOff size={22} />
+                {/* Office visual — animated status indicator */}
+                <div className="relative w-full aspect-video rounded-xl bg-gradient-to-br from-amber-500/5 to-orange-500/5 border border-amber-500/20 overflow-hidden flex flex-col items-center justify-center gap-3">
+                  <div className={`p-5 rounded-2xl border-2 transition-all duration-500 ${
+                    currentState === 'WORKING'
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                      : currentState === 'ON_BREAK'
+                        ? 'bg-blue-500/15 border-blue-500/40 text-blue-400'
+                        : currentState === 'ON_LUNCH'
+                          ? 'bg-purple-500/15 border-purple-500/40 text-purple-400'
+                          : currentState === 'IN_MEETING'
+                            ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-400'
+                            : 'bg-muted/30 border-border/40 text-muted-foreground'
+                  }`}>
+                    {currentState === 'WORKING' && <Building2 size={36} />}
+                    {currentState === 'ON_BREAK' && <Coffee size={36} />}
+                    {currentState === 'ON_LUNCH' && <UtensilsCrossed size={36} />}
+                    {currentState === 'IN_MEETING' && <Handshake size={36} />}
+                    {(currentState === 'WORKDAY_COMPLETED' || currentState === 'OFF_DUTY' || currentState === 'ATTENDANCE_MARKED') && <CheckCircle2 size={36} />}
+                  </div>
+                  <div className="text-center">
+                    <div className={`text-sm font-bold ${
+                      currentState === 'WORKING' ? 'text-amber-400'
+                      : currentState === 'ON_BREAK' ? 'text-blue-400'
+                      : currentState === 'ON_LUNCH' ? 'text-purple-400'
+                      : currentState === 'IN_MEETING' ? 'text-indigo-400'
+                      : 'text-muted-foreground'
+                    }`}>
+                      {currentState === 'WORKING' ? 'In Office — Working'
+                        : currentState === 'ON_BREAK' ? 'On Break'
+                        : currentState === 'ON_LUNCH' ? 'On Lunch'
+                        : currentState === 'IN_MEETING' ? 'In Meeting'
+                        : currentState === 'WORKDAY_COMPLETED' ? 'Workday Complete'
+                        : 'Not Working'}
                     </div>
-                    <div className="text-xs font-semibold text-muted-foreground">
-                      {currentState === 'IN_MEETING'
-                        ? 'Camera Off (Freed for Meeting)'
-                        : 'Camera Stream Inactive'}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground/70 max-w-[220px] mx-auto">
-                      {currentState === 'IN_MEETING'
-                        ? 'Your webcam is freed for Zoom/Google Meet. Meeting time is calculating as official working hours.'
-                        : 'Camera stays on across tabs while working. Only turns off during Break, Lunch, Meeting, or End Workday.'}
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      {currentState === 'WORKING' && <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Session timer running</span>}
+                      {currentState === 'ON_BREAK' && 'Break timer running. Working time paused.'}
+                      {currentState === 'ON_LUNCH' && 'Lunch timer running. Working time paused.'}
+                      {currentState === 'IN_MEETING' && 'Meeting time counts as working hours.'}
+                      {currentState === 'WORKDAY_COMPLETED' && 'No further tracking today.'}
                     </div>
                   </div>
-                )}
+                </div>
 
-                {/* Face Presence Overlay Indicator */}
-                {isVideoActive && (
-                  <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+                {/* Office mode info */}
+                <div className="space-y-2 text-xs border-t border-border/40 pt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Work Mode</span>
+                    <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1"><Building2 size={11} /> Working from Office</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Camera Monitoring</span>
+                    <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1"><CameraOff size={11} /> Disabled</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Auto End-of-Day</span>
+                    <span className="text-[11px] font-semibold text-amber-400">7:00 PM + 30 min idle</span>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 text-[11px] text-amber-300/80 flex items-start gap-2">
+                    <Activity size={13} className="shrink-0 mt-0.5" />
+                    <span>Activity & screen monitoring remains active. Your admin can see productivity metrics.</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // WFH MODE: Camera / Face Presence Monitoring Card
+              <div className="bg-card border border-border/40 rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Video size={18} className="text-primary" />
+                    <span className="font-bold text-sm">Face Verification Feed</span>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                        isFaceDetected
-                          ? 'bg-emerald-500/90 text-white'
-                          : 'bg-amber-500/90 text-white'
+                      className={`text-[11px] font-mono font-medium px-2 py-0.5 rounded ${
+                        isVideoActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-muted text-muted-foreground'
                       }`}
                     >
-                      {isFaceDetected ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
-                      {isFaceDetected ? 'Face Present' : 'Face Missing'}
-                    </span>
-
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/70 text-white">
-                      Conf: {faceConfidence}%
+                      {isVideoActive ? 'Camera Live' : 'Camera Off'}
                     </span>
                   </div>
-                )}
-              </div>
-
-              {/* Privacy & Configuration Details */}
-              <div className="space-y-2.5 text-xs text-muted-foreground border-t border-border/40 pt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px]">Continuous Tracking</span>
-                  <span className="text-[11px] font-semibold text-emerald-400">Active Across All Tabs</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px]">Face Grace Period</span>
-                  <div className="flex items-center gap-1">
-                    <select
-                      value={gracePeriodConfig}
-                      onChange={(e) => setGracePeriodConfig(Number(e.target.value))}
-                      className="bg-muted text-[11px] px-2 py-0.5 rounded border border-border/40 font-mono"
-                    >
-                      <option value={3}>3 seconds</option>
-                      <option value={4}>4 seconds</option>
-                      <option value={5}>5 seconds</option>
-                      <option value={8}>8 seconds</option>
-                    </select>
+
+                {/* Video Player Box */}
+                <div className="relative w-full aspect-video rounded-xl bg-black/60 border border-border/40 overflow-hidden flex items-center justify-center">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-cover transform -scale-x-100 ${
+                      isVideoActive ? 'opacity-100' : 'hidden'
+                    }`}
+                  />
+
+                  {!isVideoActive && (
+                    <div className="text-center p-4 space-y-2">
+                      <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center mx-auto text-muted-foreground">
+                        <CameraOff size={22} />
+                      </div>
+                      <div className="text-xs font-semibold text-muted-foreground">
+                        {currentState === 'IN_MEETING'
+                          ? 'Camera Off (Freed for Meeting)'
+                          : 'Camera Stream Inactive'}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground/70 max-w-[220px] mx-auto">
+                        {currentState === 'IN_MEETING'
+                          ? 'Your webcam is freed for Zoom/Google Meet. Meeting time is calculating as official working hours.'
+                          : 'Camera stays on across tabs while working. Only turns off during Break, Lunch, Meeting, or End Workday.'}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Face Presence Overlay Indicator */}
+                  {isVideoActive && (
+                    <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                          isFaceDetected
+                            ? 'bg-emerald-500/90 text-white'
+                            : 'bg-amber-500/90 text-white'
+                        }`}
+                      >
+                        {isFaceDetected ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
+                        {isFaceDetected ? 'Face Present' : 'Face Missing'}
+                      </span>
+
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/70 text-white">
+                        Conf: {faceConfidence}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Privacy & Configuration Details */}
+                <div className="space-y-2.5 text-xs text-muted-foreground border-t border-border/40 pt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px]">Continuous Tracking</span>
+                    <span className="text-[11px] font-semibold text-emerald-400">Active Across All Tabs</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px]">Face Grace Period</span>
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={gracePeriodConfig}
+                        onChange={(e) => setGracePeriodConfig(Number(e.target.value))}
+                        className="bg-muted text-[11px] px-2 py-0.5 rounded border border-border/40 font-mono"
+                      >
+                        <option value={3}>3 seconds</option>
+                        <option value={4}>4 seconds</option>
+                        <option value={5}>5 seconds</option>
+                        <option value={8}>8 seconds</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 text-[11px] text-primary/90 flex items-start gap-2">
+                    <ShieldCheck size={14} className="shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Privacy First:</strong> Video is analyzed locally in memory and never stored or uploaded.
+                    </span>
                   </div>
                 </div>
-
-                <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 text-[11px] text-primary/90 flex items-start gap-2">
-                  <ShieldCheck size={14} className="shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Privacy First:</strong> Video is analyzed locally in memory and never stored or uploaded.
-                  </span>
-                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Today's Audit Event Timeline */}
@@ -1968,8 +2258,45 @@ export function AttendancePage() {
 
           {/* Filters Bar */}
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '16px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {/* WFH / Office sub-tab toggle */}
+            <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-xl border border-border/40">
+              <button
+                id="admin-filter-all-btn"
+                onClick={() => setAdminWorkModeFilter('ALL')}
+                className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all ${
+                  adminWorkModeFilter === 'ALL'
+                    ? 'bg-white text-black shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                All
+              </button>
+              <button
+                id="admin-filter-wfh-btn"
+                onClick={() => setAdminWorkModeFilter('WFH')}
+                className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 ${
+                  adminWorkModeFilter === 'WFH'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-blue-400 hover:text-blue-300'
+                }`}
+              >
+                <Home size={11} /> WFH
+              </button>
+              <button
+                id="admin-filter-office-btn"
+                onClick={() => setAdminWorkModeFilter('OFFICE')}
+                className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 ${
+                  adminWorkModeFilter === 'OFFICE'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-amber-400 hover:text-amber-300'
+                }`}
+              >
+                <Building2 size={11} /> Office
+              </button>
+            </div>
+
             {/* Search — grows to fill available space */}
-            <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '180px' }}>
+            <div style={{ position: 'relative', flex: '1 1 180px', minWidth: '160px' }}>
               <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
               <input
                 type="text"
@@ -2033,8 +2360,9 @@ export function AttendancePage() {
                 <thead>
                   <tr className="border-b border-border/40 font-semibold uppercase text-muted-foreground bg-muted/20">
                     <th className="py-3 px-4">Employee</th>
+                    <th className="py-3 px-4">Mode</th>
                     <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Face-Verified Working</th>
+                    <th className="py-3 px-4 text-right">Working Time</th>
                     <th className="py-3 px-4 text-right">Meeting Time</th>
                     <th className="py-3 px-4 text-right">Mouse Activity</th>
                     <th className="py-3 px-4 text-right">Keyboard Activity</th>
@@ -2062,6 +2390,16 @@ export function AttendancePage() {
                               <div className="text-[11px] text-muted-foreground">{emp.user.email}</div>
                             </div>
                           </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            emp.workMode === 'OFFICE'
+                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                              : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                          }`}>
+                            {emp.workMode === 'OFFICE' ? <Building2 size={9} /> : <Home size={9} />}
+                            {emp.workMode === 'OFFICE' ? 'Office' : 'WFH'}
+                          </span>
                         </td>
                         <td className="py-3 px-4">{getStateBadge(emp.currentState)}</td>
                         <td className="py-3 px-4 text-right font-mono font-bold text-emerald-400">
@@ -2101,7 +2439,7 @@ export function AttendancePage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-muted-foreground">
+                      <td colSpan={11} className="py-8 text-center text-muted-foreground">
                         No employees found matching filter criteria.
                       </td>
                     </tr>
@@ -2111,6 +2449,69 @@ export function AttendancePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 0: WORK MODE SELECTION                                         */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {showWorkModeModal && (
+        <WorkModeSelectionModal
+          onSelect={handleWorkModeSelected}
+          isSubmitting={markAttendanceMutation.isPending || startWorkingMutation.isPending}
+        />
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 0b: OFFICE IDLE END-OF-DAY COUNTDOWN                          */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {showIdleEndModal && createPortal(
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-card border border-rose-500/40 rounded-3xl shadow-2xl shadow-rose-500/20 p-7 space-y-5 animate-in zoom-in-95 duration-300">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 mb-4">
+                <Clock size={28} className="text-rose-400" />
+              </div>
+              <h2 className="text-lg font-extrabold text-foreground">End of Day — Still Working?</h2>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                You've been idle for 30+ minutes after 7 PM. Your workday will auto-end in:
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="text-6xl font-extrabold font-mono text-rose-400 tabular-nums">
+                {Math.floor(idleCountdown / 60).toString().padStart(2, '0')}:{(idleCountdown % 60).toString().padStart(2, '0')}
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">seconds remaining before automatic end</div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                id="idle-still-working-btn"
+                onClick={() => {
+                  lastActivityRef.current = Date.now();
+                  if (idleCountdownRef.current) clearInterval(idleCountdownRef.current);
+                  setShowIdleEndModal(false);
+                }}
+                className="flex-1 py-3 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-md shadow-emerald-600/20"
+              >
+                I'm Still Working
+              </button>
+              <button
+                id="idle-end-workday-btn"
+                onClick={() => {
+                  if (idleCountdownRef.current) clearInterval(idleCountdownRef.current);
+                  setShowIdleEndModal(false);
+                  endWorkdayMutation.mutate();
+                }}
+                className="flex-1 py-3 rounded-xl font-bold text-sm bg-rose-600 hover:bg-rose-500 text-white transition-all shadow-md shadow-rose-600/20"
+              >
+                End Workday Now
+              </button>
+            </div>
+            <p className="text-center text-[10px] text-muted-foreground/60">
+              Move your mouse or press any key to dismiss automatically.
+            </p>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ─────────────────────────────────────────────────────────────────── */}
@@ -2236,14 +2637,41 @@ export function AttendancePage() {
                     {selectedEmployeeDetails.employee.name}
                     {getStateBadge(selectedEmployeeDetails.officialAttendance.currentState)}
                   </h3>
-                  <div className="text-xs text-muted-foreground">
-                    {selectedEmployeeDetails.employee.email} • {selectedEmployeeDetails.employee.role?.name}
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-muted-foreground">
+                      {selectedEmployeeDetails.employee.email} • {selectedEmployeeDetails.employee.role?.name}
+                    </span>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      selectedEmployeeDetails.officialAttendance.workMode === 'OFFICE'
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                    }`}>
+                      {selectedEmployeeDetails.officialAttendance.workMode === 'OFFICE' ? <Building2 size={10} /> : <Home size={10} />}
+                      {selectedEmployeeDetails.officialAttendance.workMode === 'OFFICE' ? 'Office' : 'WFH'}
+                    </span>
+                    {selectedEmployeeDetails.officialAttendance.hasRecord && !selectedEmployeeDetails.officialAttendance.isCompleted && (
+                      <button
+                        onClick={() => {
+                          const newMode = selectedEmployeeDetails.officialAttendance.workMode === 'OFFICE' ? 'WFH' : 'OFFICE';
+                          changeWorkModeMutation.mutate({ targetUserId: selectedEmployeeDetails.employee.id, workMode: newMode });
+                        }}
+                        disabled={changeWorkModeMutation.isPending}
+                        className="text-[10px] font-bold text-primary hover:underline ml-1"
+                      >
+                        {changeWorkModeMutation.isPending ? 'Updating...' : `Switch to ${selectedEmployeeDetails.officialAttendance.workMode === 'OFFICE' ? 'WFH' : 'Office'}`}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-2.5">
-                {!isWatchingLiveStream ? (
+                {selectedEmployeeDetails.officialAttendance.workMode === 'OFFICE' ? (
+                  <div className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5">
+                    <Building2 size={15} />
+                    <span>Office Mode (No Camera)</span>
+                  </div>
+                ) : !isWatchingLiveStream ? (
                   selectedEmployeeDetails.officialAttendance.currentState === 'WORKING' ||
                   selectedEmployeeDetails.officialAttendance.currentState === 'FACE_NOT_DETECTED' ||
                   selectedEmployeeDetails.officialAttendance.currentState === 'IN_MEETING' ? (
