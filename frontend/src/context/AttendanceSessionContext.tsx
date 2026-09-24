@@ -550,37 +550,13 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
 
     let screenStream = screenStreamRef.current;
     if (!screenStream || !screenStream.active || !screenStream.getVideoTracks().some((t) => t.readyState === 'live')) {
-      // Automatic silent screen capture in Desktop App
-      if (typeof window !== 'undefined' && (window as any).electronAPI?.isDesktop) {
-        try {
-          if ((window as any).electronAPI?.getScreenSourceId) {
-            const sourceId = await (window as any).electronAPI.getScreenSourceId();
-            if (sourceId) {
-              screenStream = await navigator.mediaDevices.getUserMedia({
-                audio: false,
-                video: {
-                  mandatory: {
-                    chromeMediaSource: 'desktop',
-                    chromeMediaSourceId: sourceId,
-                    minWidth: 1280,
-                    maxWidth: 1920,
-                    minHeight: 720,
-                    maxHeight: 1080,
-                  },
-                } as any,
-              });
-            }
-          }
-
-          if (!screenStream || !screenStream.active) {
-            screenStream = await navigator.mediaDevices.getDisplayMedia({
-              video: { cursor: 'always' } as any,
-              audio: false,
-            });
-          }
-        } catch (err) {
-          console.error('[Employee WebRTC] Desktop App screen acquisition error:', err);
-        }
+      try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { cursor: 'always' } as any,
+          audio: false,
+        });
+      } catch (err) {
+        console.error('[Employee WebRTC] Screen capture error:', err);
       }
 
       if (screenStream && screenStream.active) {
@@ -595,12 +571,11 @@ export function AttendanceSessionProvider({ children }: { children: React.ReactN
           };
         });
       } else {
-        console.warn('[Employee WebRTC] Screen stream not active. Silent streaming requires Desktop App.');
         sendMessage({
           type: 'WEBRTC_SCREEN_ERROR',
           targetUserId: targetSenderId,
           payload: {
-            error: 'Automatic live screen streaming requires the SnapServe Tracker Desktop Application. Please ensure the employee is running the desktop app.',
+            error: 'Screen sharing permission was not granted or cancelled by the user.',
           },
         });
         return;

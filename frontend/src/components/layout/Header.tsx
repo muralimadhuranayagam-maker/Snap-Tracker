@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Plus, Shield, Building2, Ticket, CheckSquare, ChevronDown, CheckCircle2, FolderPlus, Menu, Sun, Moon, LogOut, Monitor } from 'lucide-react';
+import { Bell, Plus, Shield, Building2, Ticket, CheckSquare, ChevronDown, CheckCircle2, FolderPlus, Menu, Sun, Moon, LogOut } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { CreateTaskModal } from '../tasks/CreateTaskModal';
 import { RaiseTicketModal } from '../tickets/RaiseTicketModal';
@@ -28,30 +28,6 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
   const [isEndDayLogoffModalOpen, setIsEndDayLogoffModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Detect if running inside PWA Standalone app window or Electron Desktop App
-  const [isStandalone, setIsStandalone] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return (
-      window.matchMedia('(display-mode: standalone)').matches ||
-      window.matchMedia('(display-mode: window-controls-overlay)').matches ||
-      (window.navigator as any).standalone === true ||
-      document.referrer.includes('android-app://') ||
-      !!(window as any).electronAPI?.isDesktop
-    );
-  });
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(display-mode: standalone)');
-    const handleChange = (e: MediaQueryListEvent) => {
-      setIsStandalone(
-        e.matches ||
-        (window.navigator as any).standalone === true ||
-        !!(window as any).electronAPI?.isDesktop
-      );
-    };
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
 
   // White / Black Theme Toggle
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -263,24 +239,6 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
             {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
           </button>
 
-          {/* Desktop Install Quick Button (Only Shown when browsing on Web tab, hidden in Desktop App) */}
-          {!isStandalone && (
-            <button
-              onClick={() => {
-                const promptEvent = (window as any).deferredInstallPrompt;
-                if (promptEvent) {
-                  promptEvent.prompt();
-                }
-                // Also notify PWAInstallBanner to open banner/modal
-                window.dispatchEvent(new CustomEvent('open-pwa-install-banner'));
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition shadow-sm cursor-pointer"
-              title="Install SnapServe Tracker Application on Windows Desktop"
-            >
-              <Monitor size={14} />
-              <span>Install Desktop App</span>
-            </button>
-          )}
 
           <div className="divider" style={{ width: '1px', height: '24px', margin: '0 4px' }} />
 

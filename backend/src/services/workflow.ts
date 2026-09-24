@@ -56,35 +56,9 @@ export async function executeWorkflows(trigger: string, payload: any) {
   }
 }
 
-async function createRelatedTask(triggerTask: any, config: any) {
-  if (!triggerTask?.id) return;
-
-  const dept = config.departmentCode
-    ? await prisma.department.findFirst({ where: { code: config.departmentCode } })
-    : null;
-
-  const backlogStatus = await prisma.taskStatus.findFirst({ where: { name: 'BACKLOG' } });
-  const medPriority = await prisma.taskPriority.findFirst({ where: { name: 'MEDIUM' } });
-  const taskType = await prisma.taskType.findFirst({ where: { name: config.taskType || 'Task' } });
-
-  // Count existing tasks in that dept for ID
-  const deptCode = dept?.code || 'GEN';
-  const count = await prisma.task.count({ where: { taskId: { startsWith: deptCode + '-' } } });
-  const newTaskId = `${deptCode}-${1001 + count}`;
-
-  await prisma.task.create({
-    data: {
-      taskId: newTaskId,
-      title: config.title?.replace('{{triggerTitle}}', triggerTask.title) || `Follow-up: ${triggerTask.title}`,
-      description: config.description || `Auto-generated from workflow. Triggered by: ${triggerTask.taskId}`,
-      departmentId: dept?.id || triggerTask.departmentId,
-      projectId: triggerTask.projectId,
-      statusId: backlogStatus?.id,
-      priorityId: medPriority?.id,
-      taskTypeId: taskType?.id,
-      reporterId: null,
-    }
-  });
+async function createRelatedTask(_triggerTask: any, _config: any) {
+  // Automated task creation is disabled per user configuration. Tasks must only be created explicitly.
+  return;
 }
 
 async function sendWorkflowNotification(triggerTask: any, config: any) {

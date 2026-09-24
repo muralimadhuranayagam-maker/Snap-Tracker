@@ -115,7 +115,16 @@ const TASK_INCLUDE = {
   ticket: { select: { id: true, ticketId: true, title: true, status: true } },
   approvals: { include: { requester: { select: { id: true, name: true } } } },
   milestone: { select: { id: true, name: true } },
-  assignee: { select: { id: true, name: true, email: true, avatar: true } },
+  assignee: { 
+    select: { 
+      id: true, 
+      name: true, 
+      email: true, 
+      avatar: true,
+      role: { select: { id: true, name: true } },
+      department: { select: { id: true, name: true, code: true } }
+    } 
+  },
   reporter: { select: { id: true, name: true, email: true, avatar: true } },
   reviewer: { select: { id: true, name: true, email: true, avatar: true } },
   labels: { include: { label: true } },
@@ -475,10 +484,6 @@ router.post('/', async (req, res, next) => {
     // Broadcast
     broadcast({ type: WSEventTypes.TASK_CREATED, payload: { id: task.id, taskId: task.taskId, title } });
 
-    // Run workflow engine
-    const { executeWorkflows } = await import('../services/workflow');
-    executeWorkflows('TASK_CREATED', task).catch(console.error);
-
     res.status(201).json(calculateLiveTaskHours(task));
   } catch (err) {
     next(err);
@@ -740,7 +745,7 @@ router.patch('/:id', async (req, res, next) => {
   }
 });
 
-// DELETE /api/tasks/:id — Admin only (soft delete)
+// DELETE /api/tasks/:id — Admin only (Super Admin completely deletes, Admin soft-deletes)
 router.delete('/:id', requireAdminOrAbove, async (req, res, next) => {
   try {
     const task = await prisma.task.findFirst({
@@ -749,10 +754,31 @@ router.delete('/:id', requireAdminOrAbove, async (req, res, next) => {
 
     if (!task) throw new AppError('Task not found', 404);
 
-    await prisma.task.update({
-      where: { id: req.params.id },
-      data: { isDeleted: true }
-    });
+    const isSuperAdmin = req.user!.roleName === 'SUPER_ADMIN';
+
+    if (isSuperAdmin) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.approval.deleteMany({ where: { taskId: task.id } });
+          await tx.taskDependency.deleteMany({
+            where: { OR: [{ sourceId: task.id }, { targetId: task.id }] }
+          });
+          await tx.task.updateMany({ where: { parentId: task.id }, data: { parentId: null } });
+          await tx.task.delete({ where: { id: task.id } });
+        });
+      } catch (hardDeleteErr) {
+        console.warn('[TASK] Hard delete had relation constraint, falling back to soft delete:', hardDeleteErr);
+        await prisma.task.update({
+          where: { id: req.params.id },
+          data: { isDeleted: true }
+        });
+      }
+    } else {
+      await prisma.task.update({
+        where: { id: req.params.id },
+        data: { isDeleted: true }
+      });
+    }
 
     await createAuditLog({
       userId: req.user!.id,
@@ -769,7 +795,7 @@ router.delete('/:id', requireAdminOrAbove, async (req, res, next) => {
       broadcast({ type: WSEventTypes.WORKLOAD_UPDATED, payload: { assigneeId: task.assigneeId } });
     }
 
-    res.json({ message: 'Task deleted' });
+    res.json({ message: 'Task deleted successfully' });
   } catch (err) {
     next(err);
   }

@@ -36,7 +36,13 @@ router.get('/', async (req, res, next) => {
     }
 
     if (departmentId) where.departmentId = departmentId;
-    if (isActive !== undefined) where.isActive = isActive === 'true';
+    if (isActive !== undefined) {
+      if (isActive !== 'all') {
+        where.isActive = isActive === 'true';
+      }
+    } else {
+      where.isActive = true;
+    }
     if (roleId) where.roleId = roleId;
     if (search) {
       where.OR = [
@@ -266,26 +272,62 @@ router.patch('/:id', async (req, res, next) => {
   }
 });
 
-// DELETE /api/users/:id — Super Admin only (soft delete)
+// DELETE /api/users/:id — Super Admin only (complete deletion with deactivation fallback)
 router.delete('/:id', requireRole('SUPER_ADMIN'), async (req, res, next) => {
   try {
-    if (req.params.id === req.user!.id) throw new AppError("You cannot deactivate yourself", 400);
+    const { id } = req.params;
+    if (id === req.user!.id) throw new AppError("You cannot delete yourself", 400);
 
-    const user = await prisma.user.update({
-      where: { id: req.params.id },
-      data: { isActive: false }
-    });
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) throw new AppError("User not found", 404);
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        // 1. Unlink assigned/reported/reviewed tasks
+        await tx.task.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } });
+        await tx.task.updateMany({ where: { reporterId: id }, data: { reporterId: null } });
+        await tx.task.updateMany({ where: { reviewerId: id }, data: { reviewerId: null } });
+
+        // 2. Unlink tickets
+        await tx.ticket.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } });
+        await tx.ticket.updateMany({ where: { reporterId: id }, data: { reporterId: req.user!.id } });
+
+        // 3. Approvals
+        await tx.approval.updateMany({ where: { approverId: id }, data: { approverId: null } });
+        await tx.approval.deleteMany({ where: { requesterId: id } });
+
+        // 4. Leave requests
+        await tx.leave.updateMany({ where: { approverId: id }, data: { approverId: req.user!.id } });
+
+        // 5. Comments & worklogs
+        await tx.taskComment.deleteMany({ where: { userId: id } });
+        await tx.taskWorklog.deleteMany({ where: { userId: id } });
+        await tx.ticketComment.deleteMany({ where: { userId: id } });
+
+        // 6. Delete user completely
+        await tx.user.delete({ where: { id } });
+      });
+    } catch (hardDeleteErr) {
+      console.warn('[USER] Hard delete had relation constraint, falling back to soft deactivation:', hardDeleteErr);
+      await prisma.user.update({
+        where: { id },
+        data: { isActive: false }
+      });
+    }
 
     await createAuditLog({
       userId: req.user!.id,
       userEmail: req.user!.email,
-      action: AuditActions.USER_DEACTIVATED,
+      action: AuditActions.USER_DELETED,
       entity: 'User',
       entityId: user.id,
+      oldValue: { email: user.email, name: user.name },
       req,
     });
 
-    res.json({ message: 'User deactivated successfully' });
+    broadcast({ type: 'USER_DELETED', payload: { id: user.id } });
+
+    res.json({ message: 'User deleted successfully' });
   } catch (err) {
     next(err);
   }

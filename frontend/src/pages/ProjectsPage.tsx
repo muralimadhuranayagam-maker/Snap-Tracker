@@ -11,19 +11,22 @@ import {
   Ticket, 
   ArrowRight, 
   ShieldAlert,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import toast from 'react-hot-toast';
 import { ProjectTasksModal } from '../components/projects/ProjectTasksModal';
 import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
+import { DeleteConfirmModal } from '../components/common/DeleteConfirmModal';
 
 export function ProjectsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const isAdmin = user && ['SUPER_ADMIN', 'ADMIN'].includes(user.role);
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -31,6 +34,23 @@ export function ProjectsPage() {
   const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<any | null>(null);
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [createTaskProjectId, setCreateTaskProjectId] = useState<string | undefined>(undefined);
+  const [deletingProject, setDeletingProject] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteProject = async () => {
+    if (!deletingProject) return;
+    try {
+      setIsDeleting(true);
+      await api.delete(`/projects/${deletingProject.id}`);
+      toast.success(`Project "${deletingProject.name}" deleted completely`);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setDeletingProject(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to delete project');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // New Project Form
   const [name, setName] = useState('');
@@ -187,7 +207,35 @@ export function ProjectsPage() {
                     }`}>
                       {p.health || 'HEALTHY'}
                     </span>
-                    <span className="badge bg-elevated text-[10px]">{p.status}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="badge bg-elevated text-[10px]">{p.status}</span>
+                      {isSuperAdmin && (
+                        <button
+                          type="button"
+                          title="Delete Project (Super Admin)"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingProject(p);
+                          }}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '4px',
+                            padding: '2px 4px',
+                            color: '#94a3b8',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div>
@@ -432,6 +480,18 @@ export function ProjectsPage() {
           defaultProjectId={createTaskProjectId}
         />
       )}
+
+      {/* Delete Confirmation Modal for Super Admin */}
+      <DeleteConfirmModal
+        isOpen={!!deletingProject}
+        title="Delete Project"
+        recordType="Project"
+        recordTitle={deletingProject?.name}
+        recordSubtitle={deletingProject?.status}
+        isLoading={isDeleting}
+        onClose={() => setDeletingProject(null)}
+        onConfirm={handleDeleteProject}
+      />
     </div>
   );
 }

@@ -17,13 +17,16 @@ import {
   Building,
   Ticket,
   History,
-  FolderKanban
+  FolderKanban,
+  Trash2,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { CreateTaskModal } from '../components/tasks/CreateTaskModal';
 import { RaiseTicketModal } from '../components/tickets/RaiseTicketModal';
 import { SubmitForReviewModal } from '../components/tasks/SubmitForReviewModal';
+import { DeleteConfirmModal } from '../components/common/DeleteConfirmModal';
 
 export function TasksPage() {
   const { user } = useAuthStore();
@@ -31,14 +34,38 @@ export function TasksPage() {
   const queryClient = useQueryClient();
 
   const isAdminOrSuper = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [scope, setScope] = useState<'my' | 'all'>(user?.role === 'EMPLOYEE' ? 'my' : 'all');
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
+
+  // Super Admin 3-dropdown filters
+  const [selectedUser, setSelectedUser] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [selectedProject, setSelectedProject] = useState('');
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isRaiseTicketModalOpen, setIsRaiseTicketModalOpen] = useState(false);
   const [reviewModalTask, setReviewModalTask] = useState<any | null>(null);
+  const [deletingTask, setDeletingTask] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteTask = async () => {
+    if (!deletingTask) return;
+    try {
+      setIsDeleting(true);
+      await api.delete(`/tasks/${deletingTask.id}`);
+      toast.success(`Task ${deletingTask.taskId || ''} deleted completely`);
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setDeletingTask(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to delete task');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Fetch Tasks with scope
   const { data: rawTasks = [], isLoading } = useQuery({
@@ -62,14 +89,61 @@ export function TasksPage() {
     }
   });
 
-  // Client-side search and priority filtering
+  // 1. Fetch Users for Super Admin filter
+  const { data: usersList = [] } = useQuery<any[]>({
+    queryKey: ['filter-users'],
+    queryFn: async () => {
+      const res = await api.get('/users');
+      return res.data || [];
+    },
+    enabled: isSuperAdmin,
+  });
+
+  // 2. Fetch Departments for Super Admin filter
+  const { data: departmentsList = [] } = useQuery<any[]>({
+    queryKey: ['filter-departments'],
+    queryFn: async () => {
+      const res = await api.get('/departments');
+      return res.data || [];
+    },
+    enabled: isSuperAdmin,
+  });
+
+  // 3. Fetch Projects for Super Admin filter
+  const { data: projectsList = [] } = useQuery<any[]>({
+    queryKey: ['filter-projects'],
+    queryFn: async () => {
+      const res = await api.get('/projects');
+      return res.data || [];
+    },
+    enabled: isSuperAdmin,
+  });
+
+  // Client-side search and filtering
   const filteredTasks = rawTasks.filter((t: any) => {
     const matchesSearch = !searchQuery || 
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
       t.taskId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesPriority = !priorityFilter || t.priority?.name === priorityFilter;
-    return matchesSearch && matchesPriority;
+
+    // Super Admin Filter 1: Users (All vs Particular Employee)
+    const matchesUser = !isSuperAdmin || !selectedUser || 
+      t.assigneeId === selectedUser || 
+      t.assignee?.id === selectedUser;
+
+    // Super Admin Filter 2: Department (All vs Particular Department)
+    const matchesDepartment = !isSuperAdmin || !selectedDepartment || 
+      t.departmentId === selectedDepartment || 
+      t.department?.id === selectedDepartment ||
+      t.assignee?.department?.id === selectedDepartment;
+
+    // Super Admin Filter 3: Project Name (All vs Particular Project)
+    const matchesProject = !isSuperAdmin || !selectedProject || 
+      t.projectId === selectedProject || 
+      t.project?.id === selectedProject;
+
+    return matchesSearch && matchesPriority && matchesUser && matchesDepartment && matchesProject;
   });
 
   // Column Configuration with Dot Colors and Display Labels (5 strict columns)
@@ -228,8 +302,8 @@ export function TasksPage() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-surface p-3 rounded-lg border border-subtle">
-        <div className="relative flex-1 w-full max-w-sm">
+      <div className="bg-surface p-3 rounded-lg border border-subtle flex flex-wrap items-center justify-between gap-3">
+        <div className="relative flex-1 min-w-[220px] max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input
             type="text"
@@ -240,7 +314,70 @@ export function TasksPage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+          {/* Super Admin Exclusive Filters */}
+          {isSuperAdmin && (
+            <>
+              {/* 1. Users Dropdown */}
+              <div className="flex items-center gap-1.5">
+                <Users size={13} className="text-muted shrink-0" />
+                <select
+                  className="input text-xs py-1.5"
+                  value={selectedUser}
+                  onChange={e => setSelectedUser(e.target.value)}
+                  style={{ minWidth: '135px' }}
+                  title="Filter by Employee (Super Admin)"
+                >
+                  <option value="">All Users</option>
+                  {usersList.map((u: any) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 2. Department Dropdown */}
+              <div className="flex items-center gap-1.5">
+                <Building size={13} className="text-muted shrink-0" />
+                <select
+                  className="input text-xs py-1.5"
+                  value={selectedDepartment}
+                  onChange={e => setSelectedDepartment(e.target.value)}
+                  style={{ minWidth: '135px' }}
+                  title="Filter by Department (Super Admin)"
+                >
+                  <option value="">All Departments</option>
+                  {departmentsList.map((d: any) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 3. Project Name Dropdown */}
+              <div className="flex items-center gap-1.5">
+                <FolderKanban size={13} className="text-muted shrink-0" />
+                <select
+                  className="input text-xs py-1.5"
+                  value={selectedProject}
+                  onChange={e => setSelectedProject(e.target.value)}
+                  style={{ minWidth: '140px' }}
+                  title="Filter by Project (Super Admin)"
+                >
+                  <option value="">All Projects</option>
+                  {projectsList.map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          {/* Priority Filter */}
           <select
             className="input text-xs py-1.5"
             value={priorityFilter}
@@ -252,6 +389,22 @@ export function TasksPage() {
             <option value="MEDIUM">Medium</option>
             <option value="LOW">Low</option>
           </select>
+
+          {/* Clear Super Admin Filters button if any active */}
+          {isSuperAdmin && (selectedUser || selectedDepartment || selectedProject) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedUser('');
+                setSelectedDepartment('');
+                setSelectedProject('');
+              }}
+              className="text-[11px] text-muted hover:text-red transition px-2 py-1 rounded bg-elevated hover:bg-red/10 border border-subtle flex items-center gap-1"
+              title="Clear Super Admin Filters"
+            >
+              <X size={11} /> Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -269,6 +422,7 @@ export function TasksPage() {
                   <th>Status</th>
                   <th>Priority</th>
                   <th>Due Date</th>
+                  {isSuperAdmin && <th style={{ width: '44px', textAlign: 'center' }}></th>}
                 </tr>
               </thead>
               <tbody>
@@ -332,12 +486,40 @@ export function TasksPage() {
                         </span>
                       ) : '—'}
                     </td>
+                    {isSuperAdmin && (
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          title="Delete Task (Super Admin)"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingTask(task);
+                          }}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '6px',
+                            padding: '4px',
+                            color: '#94a3b8',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
 
                 {filteredTasks.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-12 text-muted text-xs">
+                    <td colSpan={isSuperAdmin ? 8 : 7} className="text-center py-12 text-muted text-xs">
                       No tasks found matching your filters.
                     </td>
                   </tr>
@@ -386,9 +568,37 @@ export function TasksPage() {
                               >
                                 <div className="flex items-center justify-between mb-2">
                                   <span className="text-[11px] font-mono font-semibold text-accent">{task.taskId}</span>
-                                  <span className={`badge badge-priority-${task.priority?.name?.toLowerCase() || 'medium'}`}>
-                                    {task.priority?.name}
-                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <span className={`badge badge-priority-${task.priority?.name?.toLowerCase() || 'medium'}`}>
+                                      {task.priority?.name}
+                                    </span>
+                                    {isSuperAdmin && (
+                                      <button
+                                        type="button"
+                                        title="Delete Task (Super Admin)"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDeletingTask(task);
+                                        }}
+                                        style={{
+                                          border: 'none',
+                                          background: 'transparent',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          borderRadius: '4px',
+                                          padding: '2px 4px',
+                                          color: '#94a3b8',
+                                          transition: 'all 0.15s',
+                                        }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.15)'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                                 <h4 className="text-xs font-semibold text-primary mb-2 line-clamp-2">{task.title}</h4>
                                 
@@ -422,13 +632,16 @@ export function TasksPage() {
                                     )}
                                   </div>
 
-                                  <div className="avatar avatar-sm bg-accent text-[11px]" title={task.assignee?.name || 'Unassigned'}>
-                                    {task.assignee?.avatar ? (
-                                      <img src={task.assignee.avatar} alt="" />
-                                    ) : (
-                                      task.assignee?.name?.charAt(0) || '?'
-                                    )}
-                                  </div>
+                                  {task.assignee?.name ? (
+                                    <span 
+                                      className="text-xs font-medium text-secondary truncate max-w-[130px] text-right"
+                                      title={task.assignee.name}
+                                    >
+                                      {task.assignee.name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted italic">Unassigned</span>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -462,6 +675,18 @@ export function TasksPage() {
         isOpen={!!reviewModalTask}
         task={reviewModalTask}
         onClose={() => setReviewModalTask(null)}
+      />
+
+      {/* Delete Confirmation Modal for Super Admin */}
+      <DeleteConfirmModal
+        isOpen={!!deletingTask}
+        title="Delete Task"
+        recordType="Task"
+        recordTitle={deletingTask?.title}
+        recordSubtitle={deletingTask?.taskId}
+        isLoading={isDeleting}
+        onClose={() => setDeletingTask(null)}
+        onConfirm={handleDeleteTask}
       />
     </div>
   );

@@ -214,39 +214,6 @@ async function main() {
 
   // ─── WORKFLOWS ────────────────────────────────────────────────────────────
   await prisma.workflow.deleteMany({ where: { isSystem: true } });
-  await prisma.workflow.create({
-    data: {
-      name: 'Sales → FDE Feasibility Auto-Task',
-      description: 'When Sales creates a Customer Issue, automatically create an FDE feasibility task.',
-      trigger: 'TASK_CREATED',
-      isActive: true,
-      isSystem: true,
-      config: JSON.stringify({ condition: { department: 'SAL', taskType: 'Customer Issue' } }),
-      steps: {
-        create: [
-          {
-            order: 1,
-            type: 'CREATE_TASK',
-            config: JSON.stringify({
-              departmentCode: 'FDE',
-              title: 'Feasibility review: {{triggerTitle}}',
-              taskType: 'Research',
-              description: 'Auto-generated feasibility review for customer requirement.',
-            }),
-          },
-          {
-            order: 2,
-            type: 'NOTIFY',
-            config: JSON.stringify({
-              to: 'ADMINS',
-              title: 'New FDE feasibility task created',
-              message: 'A new FDE feasibility task was created from SAL: {{taskId}}',
-            }),
-          },
-        ]
-      }
-    }
-  });
 
   // (Mock operational data removed for production)
 

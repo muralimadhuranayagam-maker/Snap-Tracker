@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { authenticate, requireAdminOrAbove } from '../middleware/auth';
-import { createAuditLog } from '../services/audit';
+import { authenticate, requireAdminOrAbove, requireRole } from '../middleware/auth';
+import { createAuditLog, AuditActions } from '../services/audit';
 import { AppError } from '../middleware/errorHandler';
 import { broadcast, WSEventTypes } from '../services/websocket';
 import { notifyProjectAssigned, notifyProjectCreated } from '../services/notifications';
@@ -259,6 +259,56 @@ router.post('/:id/milestones', requireAdminOrAbove, async (req, res, next) => {
     broadcast({ type: WSEventTypes.PROJECT_UPDATED, payload: { id: req.params.id, milestone } });
 
     res.status(201).json(milestone);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/projects/:id — Super Admin only (complete deletion)
+router.delete('/:id', requireRole('SUPER_ADMIN'), async (req, res, next) => {
+  try {
+    const project = await prisma.project.findUnique({
+      where: { id: req.params.id },
+      include: { tasks: { select: { id: true } } }
+    });
+
+    if (!project) throw new AppError('Project not found', 404);
+
+    const taskIds = project.tasks.map(t => t.id);
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Unlink tickets referencing this project
+      await tx.ticket.updateMany({
+        where: { projectId: project.id },
+        data: { projectId: null }
+      });
+
+      // 2. Clean up task relations for project tasks if any
+      if (taskIds.length > 0) {
+        await tx.approval.deleteMany({ where: { taskId: { in: taskIds } } });
+        await tx.taskDependency.deleteMany({
+          where: { OR: [{ sourceId: { in: taskIds } }, { targetId: { in: taskIds } }] }
+        });
+        await tx.task.deleteMany({ where: { id: { in: taskIds } } });
+      }
+
+      // 3. Delete project (milestones, members, documents, aiRisks cascade delete)
+      await tx.project.delete({ where: { id: project.id } });
+    });
+
+    await createAuditLog({
+      userId: req.user!.id,
+      userEmail: req.user!.email,
+      action: AuditActions.PROJECT_DELETED,
+      entity: 'Project',
+      entityId: project.id,
+      oldValue: { name: project.name },
+      req,
+    });
+
+    broadcast({ type: 'PROJECT_DELETED', payload: { id: project.id } });
+
+    res.json({ message: 'Project deleted successfully' });
   } catch (err) {
     next(err);
   }

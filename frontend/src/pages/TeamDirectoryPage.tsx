@@ -22,6 +22,7 @@ import {
   Copy
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { DeleteConfirmModal } from '../components/common/DeleteConfirmModal';
 
 // ─── INITIALS & COLOR GENERATOR ───────────────────────────────────────────────
 export function getInitials(name: string): string {
@@ -156,6 +157,25 @@ export function TeamDirectoryPage() {
 
   // Temp Password state
   const [tempPasswordState, setTempPasswordState] = useState<{ member: any, password: string, expiresAt: number } | null>(null);
+
+  // Delete Member state (Super Admin only)
+  const [deletingMember, setDeletingMember] = useState<any | null>(null);
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
+
+  const handleDeleteMember = async () => {
+    if (!deletingMember) return;
+    try {
+      setIsDeletingMember(true);
+      await api.delete(`/users/${deletingMember.id}`);
+      toast.success(`Team member "${deletingMember.name}" deleted completely`);
+      syncAllUserQueries();
+      setDeletingMember(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to delete team member');
+    } finally {
+      setIsDeletingMember(false);
+    }
+  };
 
   // Generate Temp Password Mutation
   const tempPasswordMutation = useMutation({
@@ -552,6 +572,22 @@ export function TeamDirectoryPage() {
                       >
                         <Edit2 size={12} />
                         <span>Edit</span>
+                      </button>
+                    )}
+                    {isSuperAdmin && !isSelf && (
+                      <button
+                        type="button"
+                        onClick={() => setDeletingMember(member)}
+                        className="team-edit-btn"
+                        style={{
+                          color: '#ef4444',
+                          borderColor: 'rgba(239, 68, 68, 0.3)',
+                          backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                        }}
+                        title={`Delete ${member.name} (Super Admin)`}
+                      >
+                        <Trash2 size={12} />
+                        <span>Delete</span>
                       </button>
                     )}
                   </div>
@@ -1235,6 +1271,18 @@ export function TeamDirectoryPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal for Super Admin */}
+      <DeleteConfirmModal
+        isOpen={!!deletingMember}
+        title="Delete Team Member"
+        recordType="Team Member"
+        recordTitle={deletingMember?.name}
+        recordSubtitle={deletingMember?.email}
+        isLoading={isDeletingMember}
+        onClose={() => setDeletingMember(null)}
+        onConfirm={handleDeleteMember}
+      />
     </div>
   );
 }
