@@ -11,22 +11,20 @@ import {
   Clock, 
   Sparkles, 
   ArrowRight, 
-  Users,
   Shield,
-  Building2,
   Bug,
   Briefcase,
   Megaphone,
   UserCheck,
   PlusCircle,
-  Activity,
   Calendar,
   ExternalLink,
   Search,
   Gauge,
   Timer,
   CornerDownRight,
-  Ticket
+  Ticket,
+  BarChart3
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -298,8 +296,12 @@ export function DashboardPage() {
               <span>Create Task</span>
             </button>
             {isAdminOrSuper && (
-              <a href="/reports" className="btn btn-secondary flex items-center gap-1.5">
-                <Activity size={14} /> Analytics
+              <a 
+                href="/reports" 
+                className="btn btn-secondary shadow-sm flex items-center gap-2 border border-subtle text-xs"
+              >
+                <BarChart3 size={15} className="text-blue" />
+                <span>Analytics</span>
               </a>
             )}
           </div>
@@ -323,7 +325,7 @@ export function DashboardPage() {
             </div>
             <div className="stat-card">
               <div className="flex items-start justify-between">
-                <div className="stat-icon-wrap bg-purple-subtle text-purple"><Briefcase size={18} /></div>
+                <div className="stat-icon-wrap bg-purple-subtle text-purple"><Ticket size={18} /></div>
                 <span className="text-xs text-muted">Tickets</span>
               </div>
               <div>
@@ -353,7 +355,7 @@ export function DashboardPage() {
             </div>
             <div className="stat-card">
               <div className="flex items-start justify-between">
-                <div className="stat-icon-wrap bg-amber-subtle text-amber"><AlertTriangle size={18} /></div>
+                <div className="stat-icon-wrap bg-amber-subtle text-amber"><TrendingUp size={18} /></div>
                 <span className="text-xs text-muted">Health</span>
               </div>
               <div>
@@ -369,75 +371,6 @@ export function DashboardPage() {
               <div>
                 <div className="stat-value text-red">{data.stats?.overdueTasks || 0}</div>
                 <div className="stat-label mt-1">Overdue Tasks</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Department Breakdown & Triage Queue */}
-          <div className="dashboard-grid">
-            {/* Department Breakdown Card */}
-            <div className="card">
-              <div className="card-header border-b border-subtle pb-3 mb-4">
-                <h3 className="font-semibold text-primary flex items-center gap-2">
-                  <Building2 size={16} className="text-blue" /> Departmental Load
-                </h3>
-              </div>
-              <div className="card-body p-0 flex flex-col gap-3">
-                {data.charts?.tasksByDepartment?.map((dept: any) => (
-                  <div key={dept.code} className="p-3 bg-surface border border-subtle rounded-lg flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: dept.color }}></div>
-                      <div>
-                        <span className="font-medium text-sm text-primary">{dept.name}</span>
-                        <span className="text-xs text-muted ml-2 font-mono">[{dept.code}]</span>
-                      </div>
-                    </div>
-                    <span className="font-mono text-sm font-semibold">{dept.count} tasks</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick Administrative Shortcuts */}
-            <div className="card">
-              <div className="card-header border-b border-subtle pb-3 mb-4">
-                <h3 className="font-semibold text-primary flex items-center gap-2">
-                  <Shield size={16} className="text-amber" /> System Governance
-                </h3>
-              </div>
-              <div className="card-body p-0 flex flex-col gap-2">
-                <a href="/settings" className="p-3 bg-surface hover:bg-surface-hover border border-subtle rounded-lg flex items-center justify-between transition-colors">
-                  <div className="flex items-center gap-2.5">
-                    <Users size={16} className="text-muted" />
-                    <div>
-                      <div className="text-sm font-medium text-primary">User & Role Provisioning</div>
-                      <div className="text-xs text-muted">Create employees, assign roles and departments</div>
-                    </div>
-                  </div>
-                  <ArrowRight size={14} className="text-muted" />
-                </a>
-
-                <a href="/ai-insights" className="p-3 bg-surface hover:bg-surface-hover border border-subtle rounded-lg flex items-center justify-between transition-colors">
-                  <div className="flex items-center gap-2.5">
-                    <Sparkles size={16} className="text-purple" />
-                    <div>
-                      <div className="text-sm font-medium text-primary">AI Intelligence Center</div>
-                      <div className="text-xs text-muted">Workload bottlenecks & meeting notes parser</div>
-                    </div>
-                  </div>
-                  <ArrowRight size={14} className="text-muted" />
-                </a>
-
-                <a href="/reports" className="p-3 bg-surface hover:bg-surface-hover border border-subtle rounded-lg flex items-center justify-between transition-colors">
-                  <div className="flex items-center gap-2.5">
-                    <Activity size={16} className="text-green" />
-                    <div>
-                      <div className="text-sm font-medium text-primary">Executive Performance Reports</div>
-                      <div className="text-xs text-muted">Resolution times and SLA metrics by team</div>
-                    </div>
-                  </div>
-                  <ArrowRight size={14} className="text-muted" />
-                </a>
               </div>
             </div>
           </div>

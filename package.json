@@ -4,6 +4,7 @@
   "description": "SnapServe Tracker Enterprise Collaboration & Project Management Web Suite",
   "private": true,
   "scripts": {
+    "dev": "concurrently -n \"backend,frontend\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
     "build": "npm install --prefix frontend && npm run build --prefix frontend && npm install --prefix backend && npm run build --prefix backend",

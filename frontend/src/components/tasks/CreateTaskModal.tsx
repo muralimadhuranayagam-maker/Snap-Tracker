@@ -219,28 +219,29 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
       >
         
         {/* Header with Departmental Branding */}
-        <div className="px-6 py-4.5 border-b border-subtle flex justify-between items-center bg-surface-hover rounded-t-2xl">
+        <div className="px-6 py-4 border-b border-subtle flex justify-between items-center bg-surface-hover rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-subtle text-blue flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-blue-subtle text-blue flex items-center justify-center shrink-0">
               <PlusCircle size={20} />
             </div>
 
             <div>
-              <h2 className="font-semibold text-base text-primary">
+              <h2 className="font-bold text-base text-primary tracking-tight">
                 Create & Allocate Task
               </h2>
-              <div className="text-xs text-muted flex items-center gap-1.5 mt-0.5">
-                <span className="badge badge-sm uppercase tracking-wide">
+              <div className="text-xs text-muted flex items-center gap-2 mt-0.5">
+                <span className="badge badge-sm font-semibold tracking-wide uppercase px-2 py-0.5 bg-surface-hover border border-subtle">
                   {user?.role} MODE
                 </span>
-                <span>•</span>
+                <span className="text-muted/60">•</span>
                 <span>{isAdminOrSuper ? 'Admin task creation & project allocation' : 'Create & map task to project'}</span>
               </div>
             </div>
           </div>
 
           <button 
-            className="text-muted hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-surface"
+            type="button"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-primary hover:bg-surface transition-colors"
             onClick={handleClose}
           >
             <X size={18} />
@@ -249,17 +250,17 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
 
         {/* Modal Form Body */}
         <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
-          <form id="taskCreateForm" onSubmit={handleSubmit} className="flex flex-col gap-4.5">
+          <form id="taskCreateForm" onSubmit={handleSubmit} className="flex flex-col gap-4">
             
             {/* Title */}
             <div className="form-group">
-              <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-1 block">
-                {isFDE ? 'Incident Summary / Defect Title' : isSales ? 'Client Issue / Blocker Summary' : isMarketing ? 'Deliverable / Asset Title' : 'Task Title'} *
+              <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">
+                {isFDE ? 'Incident Summary / Defect Title' : isSales ? 'Client Issue / Blocker Summary' : isMarketing ? 'Deliverable / Asset Title' : 'Task Title'} <span className="text-red font-bold">*</span>
               </label>
               <input 
                 required 
                 type="text" 
-                className="input text-sm" 
+                className="input text-sm h-10" 
                 placeholder={
                   isFDE ? 'e.g. 504 Gateway Timeout during batch deployment on US-East' :
                   isSales ? 'e.g. Acme Corp cannot onboard: SSO SAML integration fails' :
@@ -273,16 +274,17 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
 
             {/* Target Project (Required Mapping) */}
             <div className="form-group">
-              <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-1 flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-primary">
-                  <FolderKanban size={14} className="text-blue-400" />
-                  Target Project *
-                </span>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5">
+                  <FolderKanban size={13} className="text-blue" />
+                  <span>Target Project</span>
+                  <span className="text-red font-bold">*</span>
+                </label>
                 <span className="text-[11px] text-muted normal-case font-normal">All tasks must be mapped to a project</span>
-              </label>
+              </div>
               <select 
                 required 
-                className="input text-sm py-2"
+                className="input text-sm h-10"
                 value={projectId}
                 onChange={e => setProjectId(e.target.value)}
               >
@@ -297,15 +299,15 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
 
             {/* FDE Specific Fields */}
             {isFDE && !isAdminOrSuper && (
-              <div className="p-3 bg-purple-subtle/20 border border-purple/20 rounded-lg flex flex-col gap-3">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-purple">
-                  <Bug size={14} /> FDE Technical Diagnostics
+              <div className="p-4 bg-purple-subtle/20 border border-purple/20 rounded-xl flex flex-col gap-3.5">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-purple pb-2 border-b border-purple/15">
+                  <Bug size={14} /> <span>FDE Technical Diagnostics</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="text-xs text-muted mb-1 block">Environment</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Environment</label>
                     <select 
-                      className="input text-xs py-1.5"
+                      className="input text-sm h-10"
                       value={environment}
                       onChange={e => setEnvironment(e.target.value)}
                     >
@@ -315,9 +317,9 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-muted mb-1 block">Priority Level</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Priority Level</label>
                     <select 
-                      className="input text-xs py-1.5"
+                      className="input text-sm h-10"
                       value={priorityId}
                       onChange={e => setPriorityId(e.target.value)}
                     >
@@ -329,10 +331,10 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted mb-1 block">Steps to Reproduce</label>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Steps to Reproduce</label>
                   <input 
                     type="text" 
-                    className="input text-xs" 
+                    className="input text-sm h-10" 
                     placeholder="1. Login as Tenant Admin -> 2. Click Sync -> 3. Error 500" 
                     value={stepsToReproduce}
                     onChange={e => setStepsToReproduce(e.target.value)}
@@ -340,9 +342,9 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
                 </div>
 
                 <div>
-                  <label className="text-xs text-muted mb-1 block">Error Logs / Stacktrace</label>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Error Logs / Stacktrace</label>
                   <textarea 
-                    className="input text-xs font-mono resize-y min-h-[60px]" 
+                    className="input text-sm font-mono resize-y min-h-[70px]" 
                     placeholder="Paste relevant terminal logs or trace IDs here..." 
                     value={errorLogs}
                     onChange={e => setErrorLogs(e.target.value)}
@@ -353,26 +355,26 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
 
             {/* Sales Specific Fields */}
             {isSales && !isAdminOrSuper && (
-              <div className="p-3 bg-green-subtle/20 border border-green/20 rounded-lg flex flex-col gap-3">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-green">
-                  <Briefcase size={14} /> Client Account Context
+              <div className="p-4 bg-green-subtle/20 border border-green/20 rounded-xl flex flex-col gap-3.5">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-green pb-2 border-b border-green/15">
+                  <Briefcase size={14} /> <span>Client Account Context</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="text-xs text-muted mb-1 block">Client / Account Name *</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Client / Account Name *</label>
                     <input 
                       type="text" 
-                      className="input text-xs" 
+                      className="input text-sm h-10" 
                       placeholder="e.g. Globex Corp"
                       value={clientName}
                       onChange={e => setClientName(e.target.value)}
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted mb-1 block">Deal / ARR at Risk ($)</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Deal / ARR at Risk ($)</label>
                     <input 
                       type="text" 
-                      className="input text-xs" 
+                      className="input text-sm h-10" 
                       placeholder="e.g. 50,000"
                       value={dealValue}
                       onChange={e => setDealValue(e.target.value)}
@@ -380,9 +382,9 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-muted mb-1 block">Blocker Category</label>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Blocker Category</label>
                   <select 
-                    className="input text-xs py-1.5"
+                    className="input text-sm h-10"
                     value={blockerCategory}
                     onChange={e => setBlockerCategory(e.target.value)}
                   >
@@ -397,25 +399,25 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
 
             {/* Marketing Specific Fields */}
             {isMarketing && !isAdminOrSuper && (
-              <div className="p-3 bg-amber-subtle/20 border border-amber/20 rounded-lg flex flex-col gap-3">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber">
-                  <Megaphone size={14} /> Campaign Specification
+              <div className="p-4 bg-amber-subtle/20 border border-amber/20 rounded-xl flex flex-col gap-3.5">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber pb-2 border-b border-amber/15">
+                  <Megaphone size={14} /> <span>Campaign Specification</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="text-xs text-muted mb-1 block">Campaign / Initiative</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Campaign / Initiative</label>
                     <input 
                       type="text" 
-                      className="input text-xs" 
+                      className="input text-sm h-10" 
                       placeholder="e.g. Q3 Product Hunt Launch"
                       value={campaignName}
                       onChange={e => setCampaignName(e.target.value)}
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted mb-1 block">Deliverable Type</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Deliverable Type</label>
                     <select 
-                      className="input text-xs py-1.5"
+                      className="input text-sm h-10"
                       value={deliverableType}
                       onChange={e => setDeliverableType(e.target.value)}
                     >
@@ -431,16 +433,17 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
 
             {/* Admin / Super Admin Allocation Section */}
             {isAdminOrSuper && (
-              <div className="p-3.5 bg-blue-subtle/20 border border-blue/20 rounded-lg flex flex-col gap-3">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-blue">
-                  <UserCheck size={14} /> Admin Task Allocation & Department Routing
+              <div className="p-4 bg-blue-subtle/15 border border-blue/20 rounded-xl flex flex-col gap-3.5">
+                <div className="flex items-center gap-2 text-xs font-semibold text-blue pb-2 border-b border-blue/15">
+                  <UserCheck size={15} />
+                  <span>Admin Task Allocation & Department Routing</span>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="text-xs text-muted mb-1 block">Target Department</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Target Department</label>
                     <select 
-                      className="input text-xs py-1.5"
+                      className="input text-sm h-10"
                       value={departmentId}
                       onChange={e => setDepartmentId(e.target.value)}
                     >
@@ -452,9 +455,9 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
                   </div>
 
                   <div>
-                    <label className="text-xs text-muted mb-1 block font-semibold text-primary">Assignee (Owner)</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Assignee (Owner)</label>
                     <select 
-                      className="input text-xs py-1.5 font-medium"
+                      className="input text-sm h-10"
                       value={assigneeId}
                       onChange={e => setAssigneeId(e.target.value)}
                     >
@@ -468,11 +471,11 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                   <div>
-                    <label className="text-xs text-muted mb-1 block">Priority</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Priority</label>
                     <select 
-                      className="input text-xs py-1.5"
+                      className="input text-sm h-10"
                       value={priorityId}
                       onChange={e => setPriorityId(e.target.value)}
                     >
@@ -482,21 +485,21 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-muted mb-1 block">Est. Hours</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Est. Hours</label>
                     <input 
                       type="number" 
                       step="0.5" 
-                      className="input text-xs" 
+                      className="input text-sm h-10" 
                       placeholder="e.g. 4.5"
                       value={estimatedHours}
                       onChange={e => setEstimatedHours(e.target.value)}
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted mb-1 block">Target Due Date</label>
+                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">Target Due Date</label>
                     <input 
                       type="date" 
-                      className="input text-xs" 
+                      className="input text-sm h-10" 
                       value={dueDate}
                       onChange={e => setDueDate(e.target.value)}
                     />
@@ -507,12 +510,12 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
 
             {/* Common Description Field */}
             <div className="form-group">
-              <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-1 block">
+              <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5">
                 Detailed Description & Context
               </label>
               <textarea 
                 rows={4}
-                className="input text-sm resize-y" 
+                className="input text-sm resize-y leading-relaxed" 
                 placeholder="Provide complete context, links, and acceptance criteria..." 
                 value={description} 
                 onChange={e => setDescription(e.target.value)} 
@@ -521,24 +524,24 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
 
             {/* Non-admin Due Date & Priority */}
             {!isAdminOrSuper && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="text-xs text-muted mb-1 block flex items-center gap-1">
-                    <Calendar size={12} /> Desired Resolution Date
+                  <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
+                    <Calendar size={13} className="text-muted" /> <span>Desired Resolution Date</span>
                   </label>
                   <input 
                     type="date" 
-                    className="input text-xs" 
+                    className="input text-sm h-10" 
                     value={dueDate}
                     onChange={e => setDueDate(e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted mb-1 block flex items-center gap-1">
-                    <ShieldAlert size={12} /> Urgency Level
+                  <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
+                    <ShieldAlert size={13} className="text-muted" /> <span>Urgency Level</span>
                   </label>
                   <select 
-                    className="input text-xs py-1.5"
+                    className="input text-sm h-10"
                     value={priorityId}
                     onChange={e => setPriorityId(e.target.value)}
                   >
@@ -555,13 +558,13 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
 
         {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-subtle bg-surface-hover rounded-b-2xl flex justify-between items-center">
-          <span className="text-xs text-muted">
+          <span className="text-xs text-muted font-medium">
             {isAdminOrSuper ? 'Assignee will be notified instantly.' : 'Task will be mapped directly to the selected project.'}
           </span>
-          <div className="flex gap-2.5">
+          <div className="flex items-center gap-3">
             <button 
               type="button" 
-              className="btn btn-secondary text-xs px-4 py-2"
+              className="btn btn-secondary text-xs px-4 h-9 font-medium"
               onClick={handleClose}
             >
               Cancel
@@ -569,7 +572,7 @@ export function CreateTaskModal({ isOpen, onClose, defaultDepartmentId, defaultP
             <button 
               type="submit" 
               form="taskCreateForm"
-              className="btn btn-primary text-xs px-4 py-2 font-medium"
+              className="btn btn-primary text-xs px-5 h-9 font-semibold shadow-sm"
               disabled={createTaskMutation.isPending}
             >
               {createTaskMutation.isPending ? (

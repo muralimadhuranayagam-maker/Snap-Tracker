@@ -2,8 +2,8 @@ import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
+import { SnapLogo } from '../common/SnapLogo';
 import { 
-  Activity, 
   LayoutDashboard, 
   Briefcase,
   CheckSquare, 
@@ -91,8 +91,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         <div className="sidebar-logo justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="sidebar-logo-mark">
-              <Activity size={18} strokeWidth={3} />
+            <div className="sidebar-logo-mark flex items-center justify-center">
+              <SnapLogo size={22} variant="white" />
             </div>
             <span className="font-bold text-lg tracking-tight">SnapServe</span>
           </div>
@@ -113,11 +113,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="nav-section-label">Main</div>
           <NavLink to="/" end className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <LayoutDashboard className="nav-icon" />
-            Dashboard
+            <span className="flex-1">Dashboard</span>
           </NavLink>
           <NavLink to="/my-work" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <Briefcase className="nav-icon" />
-            My Work
+            <span className="flex-1">My Work</span>
           </NavLink>
           <NavLink to="/tasks" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <CheckSquare className="nav-icon" />
@@ -178,19 +178,19 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="nav-section-label">Organization</div>
           <NavLink to="/team" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <Users className="nav-icon" />
-            Team Directory
+            <span className="flex-1">Team Directory</span>
           </NavLink>
           <NavLink to="/customers" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <Building className="nav-icon" />
-            Customers
+            <span className="flex-1">Customers</span>
           </NavLink>
           <NavLink to="/attendance" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <Clock className="nav-icon" />
-            Attendance & Hours
+            <span className="flex-1">Attendance & Hours</span>
           </NavLink>
           <NavLink to="/leaves" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <CalendarDays className="nav-icon" />
-            Leave Management
+            <span className="flex-1">Leave Management</span>
           </NavLink>
         </div>
 
@@ -200,17 +200,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {isAdmin && (
             <NavLink to="/workload" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
               <Sliders className="nav-icon" />
-              Workload
+              <span className="flex-1">Workload</span>
             </NavLink>
           )}
           <NavLink to="/approvals" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
             <CheckCircle2 className="nav-icon" />
-            Approvals
+            <span className="flex-1">Approvals</span>
           </NavLink>
           {(hasPermission('reports:view') || isAdmin) && (
             <NavLink to="/reports" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
               <BarChart3 className="nav-icon" />
-              Reports
+              <span className="flex-1">Reports</span>
             </NavLink>
           )}
         </div>
@@ -221,7 +221,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {(hasPermission('settings:manage') || isAdmin) && (
             <NavLink to="/settings" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
               <Settings className="nav-icon" />
-              Settings
+              <span className="flex-1">Settings</span>
             </NavLink>
           )}
         </div>
@@ -237,7 +237,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold truncate">{user.name}</div>
+            <div className="text-sm font-semibold truncate text-primary">{user.name}</div>
             <div className="text-xs text-muted truncate">
               {user.role?.replace('_', ' ')} {user.department ? `• ${user.department.code}` : ''}
             </div>
@@ -245,7 +245,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <button 
             onClick={() => logout()} 
             title="Click to Logout"
-            className="p-1.5 rounded-md hover:bg-white/10 text-muted hover:text-foreground transition-colors shrink-0 flex items-center justify-center"
+            className="p-1.5 rounded-lg hover:bg-elevated text-muted hover:text-primary transition-colors shrink-0 flex items-center justify-center border border-transparent hover:border-subtle"
           >
             <LogOut size={15} />
           </button>

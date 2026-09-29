@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <style>
+    .logo-bar-1 { fill: #0F172A; }
+    .logo-bar-2 { fill: #64748B; }
+    .logo-bar-3 { fill: #94A3B8; }
+    @media (prefers-color-scheme: dark) {
+      .logo-bar-1 { fill: #F8FAFC; }
+      .logo-bar-2 { fill: #94A3B8; }
+      .logo-bar-3 { fill: #64748B; }
+    }
+  </style>
+  <rect x="5" y="15" width="70" height="20" rx="10" class="logo-bar-1" />
+  <rect x="15" y="40" width="70" height="20" rx="10" class="logo-bar-2" />
+  <rect x="25" y="65" width="70" height="20" rx="10" class="logo-bar-3" />
+</svg>

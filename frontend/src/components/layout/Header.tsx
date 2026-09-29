@@ -1,14 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Plus, Shield, Building2, Ticket, CheckSquare, ChevronDown, CheckCircle2, FolderPlus, Menu, Sun, Moon, LogOut } from 'lucide-react';
+import { Bell, Plus, Shield, Building2, Ticket, CheckSquare, ChevronDown, CheckCircle2, FolderPlus, Menu, Sun, Moon } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { CreateTaskModal } from '../tasks/CreateTaskModal';
 import { RaiseTicketModal } from '../tickets/RaiseTicketModal';
 import { HeaderSearchBar } from './HeaderSearchBar';
 import { NotificationDrawer } from './NotificationDrawer';
-import { AttendanceCheckInModal } from '../attendance/AttendanceCheckInModal';
-import { EndDayLogoffModal } from '../attendance/EndDayLogoffModal';
 import { api } from '../../services/api';
 import { useWebSocket } from '../../context/WebSocketContext';
 
@@ -24,8 +22,6 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
   const [isRaiseTicketModalOpen, setIsRaiseTicketModalOpen] = useState(false);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
   const [isCreateDropdownOpen, setIsCreateDropdownOpen] = useState(false);
-  const [isAttendanceCheckInModalOpen, setIsAttendanceCheckInModalOpen] = useState(false);
-  const [isEndDayLogoffModalOpen, setIsEndDayLogoffModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
 
@@ -150,26 +146,41 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
           {/* Active Persona Badge */}
           {getRoleBadge()}
 
-          {/* Daily Attendance Morning Check-In & Evening Shift Logoff Pill */}
-          {attendanceData?.isCheckedIn ? (
-            <button
-              onClick={() => setIsEndDayLogoffModalOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition shadow-sm"
-              title="Currently In Shift - Click to End Day & Transmit Full Daily Activity Report"
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>In Shift ({attendanceData?.liveHours || 0}h)</span>
-              <LogOut size={12} className="ml-0.5 opacity-80" />
-            </button>
-          ) : attendanceData?.attendance?.status === 'CHECKED_OUT' ? (
-            <div
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30"
-              title="Shift Concluded - Full Daily Activity Transmitted to Admins"
-            >
-              <CheckCircle2 size={13} className="text-blue-500" />
-              <span>Shift Done ({attendanceData?.attendance?.workHours || 0}h)</span>
-            </div>
-          ) : null}
+          {/* Daily Attendance Shift Status Indicator */}
+          {(() => {
+            if (!attendanceData?.hasRecord) return null;
+            const currentState = attendanceData.currentState;
+            const workedHours = ((attendanceData.computed?.verifiedWorkingSeconds || 0) / 3600).toFixed(1);
+
+            if (['WORKING', 'ON_BREAK', 'ON_LUNCH', 'IN_MEETING', 'FACE_NOT_DETECTED'].includes(currentState)) {
+              const label = currentState === 'ON_BREAK' ? 'On Break' : currentState === 'ON_LUNCH' ? 'On Lunch' : currentState === 'IN_MEETING' ? 'In Meeting' : `In Shift (${workedHours}h)`;
+              return (
+                <button
+                  onClick={() => navigate('/attendance')}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition shadow-sm"
+                  title="Active Shift - Click to open Attendance and live controls"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{label}</span>
+                </button>
+              );
+            }
+
+            if (currentState === 'WORKDAY_COMPLETED') {
+              return (
+                <button
+                  onClick={() => navigate('/attendance')}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/20 transition"
+                  title="Shift Concluded - Click to view daily attendance summary"
+                >
+                  <CheckCircle2 size={13} className="text-blue-500" />
+                  <span>Shift Done ({workedHours}h)</span>
+                </button>
+              );
+            }
+
+            return null;
+          })()}
 
           {/* Role-Aware Multi-Action + Create Button */}
           <div className="relative" ref={dropdownRef}>
@@ -240,7 +251,7 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
           </button>
 
 
-          <div className="divider" style={{ width: '1px', height: '24px', margin: '0 4px' }} />
+          <div className="w-[1px] h-5 bg-border-subtle shrink-0" style={{ width: '1px', height: '20px', background: 'var(--border-subtle)' }} />
 
           {/* Interactive Bell triggering Notification Drawer */}
           <button 
@@ -248,15 +259,19 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
             onClick={() => setIsNotificationDrawerOpen(true)}
             title="Notifications"
           >
-            <Bell size={18} />
+            <Bell size={17} />
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-accent text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 bg-accent text-white text-[10px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center shadow-sm">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
 
-          <div className="avatar avatar-sm bg-accent cursor-pointer ml-1 hover:opacity-80 transition">
+          <div 
+            className="avatar avatar-md bg-accent cursor-pointer hover:opacity-90 transition shrink-0"
+            title={`${user?.name} (${user?.role?.replace('_', ' ')})`}
+            onClick={() => navigate('/settings')}
+          >
             {user?.avatar ? (
               <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
             ) : (
@@ -282,18 +297,6 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
       <NotificationDrawer
         isOpen={isNotificationDrawerOpen}
         onClose={() => setIsNotificationDrawerOpen(false)}
-      />
-
-      {/* Morning Camera Attendance Check-In Modal */}
-      <AttendanceCheckInModal
-        isOpen={isAttendanceCheckInModalOpen}
-        onClose={() => setIsAttendanceCheckInModalOpen(false)}
-      />
-
-      {/* Evening Logoff & Daily Activity Submission Modal */}
-      <EndDayLogoffModal
-        isOpen={isEndDayLogoffModalOpen}
-        onClose={() => setIsEndDayLogoffModalOpen(false)}
       />
     </>
   );

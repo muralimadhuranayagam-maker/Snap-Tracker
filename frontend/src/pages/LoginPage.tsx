@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
-import { Activity } from 'lucide-react';
+import { SnapLogo } from '../components/common/SnapLogo';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -47,8 +47,8 @@ export function LoginPage() {
       
       <div className="login-card z-10">
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white" style={{ background: 'linear-gradient(135deg, var(--accent), var(--purple))' }}>
-            <Activity size={24} strokeWidth={2.5} />
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white shadow-md" style={{ background: 'linear-gradient(135deg, var(--accent), var(--purple))' }}>
+            <SnapLogo size={26} variant="white" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">SnapServe</h1>
         </div>

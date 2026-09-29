@@ -158,6 +158,16 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+[data-theme="dark"] .snap-logo-bar-1 {
+  fill: #F8FAFC;
+}
+[data-theme="dark"] .snap-logo-bar-2 {
+  fill: #94A3B8;
+}
+[data-theme="dark"] .snap-logo-bar-3 {
+  fill: #64748B;
+}
+
 [data-theme="dark"] .sidebar-footer {
   border-top: 1px solid var(--border-subtle);
 }
