@@ -719,20 +719,20 @@ export function TeamDirectoryPage() {
             style={{
               width: '100%',
               maxWidth: '520px',
-              background: '#121216',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-default)',
               borderRadius: '20px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+              boxShadow: 'var(--shadow-xl)',
               overflow: 'hidden'
             }}
             onClick={(e) => e.stopPropagation()}
             className="animate-in fade-in zoom-in-95 duration-150"
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-surface/50">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-subtle bg-surface">
               <div className="flex items-center gap-2">
                 <Edit2 size={16} className="text-accent" />
-                <h3 className="font-bold text-base text-white">
+                <h3 className="font-bold text-base text-primary">
                   {isSuperAdmin && editingMember.id !== currentUser?.id
                     ? `Edit Profile: ${editingMember.name}`
                     : 'Edit Your Profile'}
@@ -741,7 +741,7 @@ export function TeamDirectoryPage() {
               <button
                 type="button"
                 onClick={() => setEditingMember(null)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition"
+                className="p-1 rounded-lg text-secondary hover:text-primary hover:bg-hover transition"
               >
                 <X size={18} />
               </button>
@@ -751,15 +751,15 @@ export function TeamDirectoryPage() {
             <form onSubmit={handleSaveEdit} className="p-6 flex flex-col gap-5 max-h-[80vh] overflow-y-auto">
               
               {/* 1. Profile Picture Section */}
-              <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-elevated border border-subtle">
                 {/* Live Preview Avatar */}
                 <div 
                   style={{
                     width: '64px',
                     height: '64px',
                     borderRadius: '50%',
-                    background: editForm.avatar ? '#18181b' : getAvatarGradient(editForm.name || editingMember.name),
-                    border: '2px solid rgba(255, 255, 255, 0.2)',
+                    background: editForm.avatar ? 'var(--bg-elevated)' : getAvatarGradient(editForm.name || editingMember.name),
+                    border: '2px solid var(--border-default)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -963,42 +963,42 @@ export function TeamDirectoryPage() {
             style={{
               width: '100%',
               maxWidth: '540px',
-              background: '#121216',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-default)',
               borderRadius: '20px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+              boxShadow: 'var(--shadow-xl)',
               overflow: 'hidden'
             }}
             onClick={(e) => e.stopPropagation()}
             className="animate-in fade-in zoom-in-95 duration-150"
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-surface/50">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-subtle bg-surface">
               <div className="flex items-center gap-2.5">
                 <div 
                   style={{
                     width: '34px',
                     height: '34px',
                     borderRadius: '9px',
-                    background: 'rgba(59, 130, 246, 0.15)',
-                    color: '#60a5fa',
+                    background: 'var(--accent-light)',
+                    color: 'var(--accent)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    border: '1px solid rgba(96, 165, 250, 0.3)'
+                    border: '1px solid var(--accent-border)'
                   }}
                 >
                   <UserPlus size={17} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-white">Add New Team Member</h3>
+                  <h3 className="font-bold text-base text-primary">Add New Team Member</h3>
                   <p className="text-[11px] text-muted">Created profile will sync immediately to team chat, searches & tasks.</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition"
+                className="p-1 rounded-lg text-secondary hover:text-primary hover:bg-hover transition"
               >
                 <X size={18} />
               </button>
@@ -1008,14 +1008,14 @@ export function TeamDirectoryPage() {
             <form onSubmit={handleCreateSubmit} className="p-6 flex flex-col gap-4 max-h-[82vh] overflow-y-auto">
               
               {/* Profile Photo Upload & Live Fallback Preview */}
-              <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-elevated border border-subtle">
                 <div 
                   style={{
                     width: '64px',
                     height: '64px',
                     borderRadius: '50%',
-                    background: createForm.avatar ? '#18181b' : getAvatarGradient(createForm.name || 'New Member'),
-                    border: '2px solid rgba(255, 255, 255, 0.2)',
+                    background: createForm.avatar ? 'var(--bg-elevated)' : getAvatarGradient(createForm.name || 'New Member'),
+                    border: '2px solid var(--border-default)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1223,27 +1223,27 @@ export function TeamDirectoryPage() {
             style={{
               width: '100%',
               maxWidth: '400px',
-              background: '#121216',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-default)',
               borderRadius: '20px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+              boxShadow: 'var(--shadow-xl)',
               padding: '24px',
               textAlign: 'center'
             }}
             onClick={(e) => e.stopPropagation()}
             className="animate-in fade-in zoom-in-95 duration-150"
           >
-            <div className="w-12 h-12 mx-auto bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mb-4">
+            <div className="w-12 h-12 mx-auto bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-4">
               <Key size={24} />
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">Temporary Password Generated</h3>
+            <h3 className="text-lg font-bold text-primary mb-2">Temporary Password Generated</h3>
             <p className="text-sm text-muted mb-6">
               A temporary password has been generated for <strong>{tempPasswordState.member?.name}</strong>. 
               They will be required to set a permanent password upon login.
             </p>
             
-            <div className="bg-surface border border-subtle rounded-xl p-4 mb-6 flex items-center justify-between">
-              <span className="font-mono text-xl tracking-wider text-white select-all">
+            <div className="bg-elevated border border-subtle rounded-xl p-4 mb-6 flex items-center justify-between">
+              <span className="font-mono text-xl tracking-wider text-primary select-all">
                 {tempPasswordState.password}
               </span>
               <button 
@@ -1251,7 +1251,7 @@ export function TeamDirectoryPage() {
                   navigator.clipboard.writeText(tempPasswordState.password);
                   toast.success('Password copied to clipboard!');
                 }}
-                className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-accent transition-colors"
+                className="p-2 bg-surface hover:bg-hover rounded-lg text-accent transition-colors border border-subtle"
                 title="Copy to clipboard"
               >
                 <Copy size={18} />

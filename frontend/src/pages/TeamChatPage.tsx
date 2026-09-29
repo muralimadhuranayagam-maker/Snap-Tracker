@@ -837,11 +837,11 @@ export default function TeamChatPage() {
         flexDirection: 'column',
         height: 'calc(100vh - 4.5rem)',
         width: '100%',
-        background: '#09090b',
+        background: 'var(--bg-card)',
         borderRadius: '16px',
         overflow: 'hidden',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)'
+        border: '1px solid var(--border-subtle)',
+        boxShadow: 'var(--shadow-neu-raised)'
       }}
     >
       {/* ─── TOP APP-HEADER STRIP ─── */}
@@ -851,9 +851,8 @@ export default function TeamChatPage() {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '12px 20px',
-          background: 'rgba(18, 18, 22, 0.85)',
-          backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+          background: 'var(--bg-elevated)',
+          borderBottom: '1px solid var(--border-subtle)'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -874,7 +873,7 @@ export default function TeamChatPage() {
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '15px', fontWeight: 700, color: '#f4f4f5', letterSpacing: '-0.01em' }}>
+              <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                 Enterprise Live Chat & Channels
               </span>
               <span 
@@ -976,8 +975,8 @@ export default function TeamChatPage() {
         <div 
           style={{
             width: '300px',
-            background: '#0c0c0e',
-            borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+            background: 'var(--bg-secondary)',
+            borderRight: '1px solid var(--border-subtle)',
             display: 'flex',
             flexDirection: 'column',
             flexShrink: 0
@@ -1038,13 +1037,13 @@ export default function TeamChatPage() {
                           width: '100%',
                           textAlign: 'left',
                           background: isActive 
-                            ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.25) 0%, rgba(79, 70, 229, 0.2) 100%)' 
+                            ? 'var(--accent-light)' 
                             : 'transparent',
-                          color: isActive ? '#93c5fd' : '#a1a1aa',
-                          boxShadow: isActive ? 'inset 0 0 0 1px rgba(96, 165, 250, 0.4)' : 'none',
+                          color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+                          boxShadow: isActive ? 'inset 0 0 0 1px var(--accent-border)' : 'none',
                           transition: 'all 0.15s ease'
                         }}
-                        className="hover:bg-white/5 hover:text-white"
+                        className="hover:bg-elevated hover:text-primary"
                       >
                         <Hash size={16} className={isActive ? 'text-blue-400' : 'text-zinc-500'} />
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -1340,7 +1339,7 @@ export default function TeamChatPage() {
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            background: '#09090b',
+            background: 'var(--bg-card)',
             position: 'relative',
             minWidth: 0
           }}
@@ -1352,9 +1351,8 @@ export default function TeamChatPage() {
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '12px 20px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-              background: 'rgba(18, 18, 22, 0.4)',
-              backdropFilter: 'blur(8px)'
+              borderBottom: '1px solid var(--border-subtle)',
+              background: 'var(--bg-elevated)'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
@@ -1397,7 +1395,7 @@ export default function TeamChatPage() {
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#f4f4f5' }} className="truncate">
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }} className="truncate">
                         {activeDMUser?.name}
                       </span>
                       <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-mono ${getRoleBadgeColor(activeDMUser?.role?.name || '')}`}>
@@ -1429,7 +1427,7 @@ export default function TeamChatPage() {
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#f4f4f5' }} className="truncate">
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }} className="truncate">
                         {currentChannelInfo?.label || activeChannel}
                       </span>
                       {currentChannelInfo?.type === 'DEPARTMENT' && (
@@ -1475,8 +1473,8 @@ export default function TeamChatPage() {
             <div 
               style={{
                 padding: '8px 20px',
-                background: 'rgba(24, 24, 27, 0.9)',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                background: 'var(--bg-elevated)',
+                borderBottom: '1px solid var(--border-subtle)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px'
@@ -1637,11 +1635,11 @@ export default function TeamChatPage() {
                           borderRadius: '16px',
                           padding: msg.mediaType ? '6px' : '10px 14px',
                           background: isMe 
-                            ? 'linear-gradient(135deg, #2563eb 0%, #4338ca 100%)' 
-                            : 'rgba(24, 24, 27, 0.95)',
-                          border: isMe ? '1px solid rgba(96, 165, 250, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)',
-                          color: '#ffffff',
-                          boxShadow: isMe ? '0 4px 15px rgba(37, 99, 235, 0.25)' : '0 2px 8px rgba(0, 0, 0, 0.3)',
+                            ? 'linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)' 
+                            : 'var(--bg-elevated)',
+                          border: isMe ? '1px solid var(--accent-border)' : '1px solid var(--border-subtle)',
+                          color: isMe ? '#ffffff' : 'var(--text-primary)',
+                          boxShadow: isMe ? '0 4px 15px rgba(124, 58, 237, 0.25)' : 'var(--shadow-sm)',
                           borderTopRightRadius: isMe ? '4px' : '16px',
                           borderTopLeftRadius: isMe ? '16px' : '4px'
                         }}
@@ -1733,8 +1731,8 @@ export default function TeamChatPage() {
                 alignItems: 'center',
                 gap: '12px',
                 padding: '8px 16px',
-                background: 'rgba(24, 24, 27, 0.95)',
-                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+                background: 'var(--bg-elevated)',
+                borderTop: '1px solid var(--border-subtle)',
                 backdropFilter: 'blur(8px)'
               }}
             >
@@ -1742,7 +1740,7 @@ export default function TeamChatPage() {
                 <img 
                   src={filePreviewUrl} 
                   alt="Preview" 
-                  style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.15)' }} 
+                  style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border-subtle)' }} 
                 />
               ) : selectedFile.type.startsWith('video/') ? (
                 <div 
@@ -1793,9 +1791,8 @@ export default function TeamChatPage() {
           <div 
             style={{
               padding: '12px 16px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-              background: 'rgba(18, 18, 22, 0.95)',
-              backdropFilter: 'blur(12px)',
+              borderTop: '1px solid var(--border-subtle)',
+              background: 'var(--bg-elevated)',
               position: 'relative'
             }}
           >
@@ -1808,17 +1805,17 @@ export default function TeamChatPage() {
                   left: '16px',
                   right: '16px',
                   marginBottom: '8px',
-                  background: '#18181b',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-default)',
                   borderRadius: '12px',
-                  boxShadow: '0 12px 36px rgba(0,0,0,0.6)',
+                  boxShadow: 'var(--shadow-lg)',
                   maxHeight: '260px',
                   overflowY: 'auto',
                   zIndex: 50,
                   padding: '6px'
                 }}
               >
-                <div style={{ padding: '6px 10px', fontSize: '11px', fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div style={{ padding: '6px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Tag People or Group ({mentionCandidates.length})
                 </div>
                 {mentionCandidates.map((candidate, idx) => {
@@ -1835,8 +1832,8 @@ export default function TeamChatPage() {
                         padding: '8px 12px',
                         borderRadius: '8px',
                         cursor: 'pointer',
-                        background: isSelected ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                        border: isSelected ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid transparent',
+                        background: isSelected ? 'var(--accent-subtle)' : 'transparent',
+                        border: isSelected ? '1px solid var(--accent)' : '1px solid transparent',
                         transition: 'all 0.12s ease'
                       }}
                     >
@@ -1846,8 +1843,8 @@ export default function TeamChatPage() {
                             width: '28px',
                             height: '28px',
                             borderRadius: '50%',
-                            background: 'rgba(245, 158, 11, 0.25)',
-                            color: '#fbbf24',
+                            background: 'rgba(245, 158, 11, 0.15)',
+                            color: '#d97706',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -1863,8 +1860,8 @@ export default function TeamChatPage() {
                             width: '28px',
                             height: '28px',
                             borderRadius: '50%',
-                            background: 'rgba(59, 130, 246, 0.25)',
-                            color: '#93c5fd',
+                            background: 'var(--accent-subtle)',
+                            color: 'var(--accent)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -1882,11 +1879,11 @@ export default function TeamChatPage() {
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: candidate.isEveryone ? '#fbbf24' : '#f4f4f5' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: candidate.isEveryone ? '#d97706' : 'var(--text-primary)' }}>
                             @{candidate.name}
                           </span>
                           {candidate.isEveryone ? (
-                            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.2)', color: '#fcd34d' }}>
+                            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.15)', color: '#b45309' }}>
                               Notify all members
                             </span>
                           ) : candidate.user?.role?.name ? (
@@ -1896,7 +1893,7 @@ export default function TeamChatPage() {
                           ) : null}
                         </div>
                         {!candidate.isEveryone && candidate.user?.department?.name && (
-                          <div style={{ fontSize: '11px', color: '#71717a' }}>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                             {candidate.user.department.name}
                           </div>
                         )}
@@ -2054,16 +2051,16 @@ export default function TeamChatPage() {
                     width: '38px',
                     height: '38px',
                     borderRadius: '10px',
-                    background: showMentionMenu ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.04)',
-                    border: showMentionMenu ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
-                    color: showMentionMenu ? '#93c5fd' : '#a1a1aa',
+                    background: showMentionMenu ? 'var(--accent-subtle)' : 'var(--bg-surface)',
+                    border: showMentionMenu ? '1px solid var(--accent)' : '1px solid var(--border-default)',
+                    color: showMentionMenu ? 'var(--accent)' : 'var(--text-secondary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
                     flexShrink: 0
                   }}
-                  className="hover:text-blue-400 hover:bg-blue-500/10"
+                  className="hover:text-purple-600 transition-colors"
                   title="Mention someone (@everyone or member)"
                 >
                   <AtSign size={16} />
@@ -2071,7 +2068,7 @@ export default function TeamChatPage() {
 
                 {/* Text Message Input */}
                 <input 
-                  type="text"
+                  type="text" 
                   ref={inputRef}
                   value={inputText}
                   onChange={handleInputChange}
@@ -2085,14 +2082,14 @@ export default function TeamChatPage() {
                     flex: 1,
                     height: '40px',
                     padding: '0 14px',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-default)',
                     borderRadius: '10px',
-                    color: '#f4f4f5',
+                    color: 'var(--text-primary)',
                     fontSize: '13px',
                     outline: 'none'
                   }}
-                  className="focus:border-blue-500 focus:bg-white/5 transition-all"
+                  className="focus:border-accent transition-all"
                 />
 
                 {/* Microphone Voice Recording Trigger Button */}
@@ -2103,16 +2100,16 @@ export default function TeamChatPage() {
                     width: '38px',
                     height: '38px',
                     borderRadius: '10px',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    color: '#a1a1aa',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-default)',
+                    color: 'var(--text-secondary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
                     flexShrink: 0
                   }}
-                  className="hover:text-red-400 hover:bg-red-500/10"
+                  className="hover:text-red-500 hover:bg-red-500/10"
                   title="Record voice note"
                 >
                   <Mic size={16} />
@@ -2127,10 +2124,10 @@ export default function TeamChatPage() {
                     padding: '0 16px',
                     borderRadius: '10px',
                     background: (!inputText.trim() && !selectedFile) 
-                      ? 'rgba(255, 255, 255, 0.06)' 
-                      : 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
+                      ? 'var(--bg-elevated)' 
+                      : 'linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%)',
                     border: 'none',
-                    color: (!inputText.trim() && !selectedFile) ? '#71717a' : '#ffffff',
+                    color: (!inputText.trim() && !selectedFile) ? 'var(--text-muted)' : '#ffffff',
                     fontSize: '13px',
                     fontWeight: 700,
                     display: 'flex',
@@ -2138,7 +2135,7 @@ export default function TeamChatPage() {
                     gap: '6px',
                     cursor: (!inputText.trim() && !selectedFile) ? 'not-allowed' : 'pointer',
                     flexShrink: 0,
-                    boxShadow: (!inputText.trim() && !selectedFile) ? 'none' : '0 2px 10px rgba(37, 99, 235, 0.3)'
+                    boxShadow: (!inputText.trim() && !selectedFile) ? 'none' : '0 2px 10px rgba(124, 58, 237, 0.35)'
                   }}
                 >
                   <Send size={14} />
@@ -2169,11 +2166,11 @@ export default function TeamChatPage() {
             style={{
               width: '100%',
               maxWidth: '480px',
-              background: '#121216',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-default)',
               borderRadius: '16px',
               overflow: 'hidden',
-              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6)'
+              boxShadow: 'var(--shadow-xl)'
             }}
           >
             {/* Modal Header */}
@@ -2183,11 +2180,11 @@ export default function TeamChatPage() {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '16px 20px',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
+                borderBottom: '1px solid var(--border-subtle)'
               }}
             >
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#f4f4f5', margin: 0 }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
                   Start Direct Message
                 </h3>
                 <p style={{ fontSize: '12px', color: '#71717a', margin: '2px 0 0 0' }}>

@@ -172,16 +172,16 @@ export function ReportsPage() {
           <div className="card-body flex-1 p-0">
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={departmentBreakdown} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                <XAxis dataKey="name" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+                <XAxis dataKey="name" stroke="var(--text-muted)" />
+                <YAxis stroke="var(--text-muted)" />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
-                  cursor={{ fill: '#334155', opacity: 0.4 }}
+                  contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '10px', color: 'var(--text-primary)', boxShadow: 'var(--shadow-md)' }}
+                  cursor={{ fill: 'var(--bg-hover)', opacity: 0.5 }}
                 />
                 <Bar dataKey="count" name="Total Volume" radius={[4, 4, 0, 0]}>
                   {departmentBreakdown.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={entry.color || '#6366f1'} />
+                    <Cell key={`cell-${index}`} fill={entry.color || '#7c3aed'} />
                   ))}
                 </Bar>
               </BarChart>
@@ -210,11 +210,11 @@ export function ReportsPage() {
                   dataKey="count"
                 >
                   {priorityDistribution.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={entry.color || '#6366f1'} />
+                    <Cell key={`cell-${index}`} fill={entry.color || '#7c3aed'} />
                   ))}
                 </Pie>
                 <Tooltip 
-                  contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
+                  contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: '10px', color: 'var(--text-primary)', boxShadow: 'var(--shadow-md)' }}
                 />
                 <Legend verticalAlign="bottom" height={36}/>
               </PieChart>

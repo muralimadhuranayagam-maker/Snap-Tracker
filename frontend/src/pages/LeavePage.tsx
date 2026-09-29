@@ -89,11 +89,11 @@ function ApplyLeaveModal({
       onClick={onClose}
     >
       <div
-        style={{ width: '100%', maxWidth: '540px', background: '#121216', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '20px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.7)', overflow: 'hidden' }}
+        style={{ width: '100%', maxWidth: '540px', background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: '20px', boxShadow: 'var(--shadow-xl)', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ padding: '8px', borderRadius: '10px', background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}>
               <CalendarDays size={18} />
@@ -190,8 +190,8 @@ function ApplyLeaveModal({
 function ActionNoteModal({ action, leave, onConfirm, onClose }: { action: 'approve' | 'reject'; leave: any; onConfirm: (note: string) => void; onClose: () => void }) {
   const [note, setNote] = useState('');
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={onClose}>
-      <div style={{ width: '100%', maxWidth: '420px', background: '#121216', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }} onClick={e => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={onClose}>
+      <div style={{ width: '100%', maxWidth: '420px', background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: 'var(--shadow-xl)' }} onClick={e => e.stopPropagation()}>
         <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: action === 'approve' ? '#4ade80' : '#f87171' }}>
           {action === 'approve' ? '✅ Approve Leave' : '❌ Reject Leave'} — {leave?.user?.name}
         </h3>

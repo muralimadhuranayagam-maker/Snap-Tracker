@@ -31,7 +31,7 @@ export function Header({ onToggleMobileNav }: HeaderProps) {
 
   // White / Black Theme Toggle
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('snapserve-theme') as 'dark' | 'light') || 'dark';
+    return (localStorage.getItem('snapserve-theme') as 'dark' | 'light') || 'light';
   });
 
   useEffect(() => {

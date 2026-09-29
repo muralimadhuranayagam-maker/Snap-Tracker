@@ -698,16 +698,16 @@ export function TaskDetailsPage() {
                   <div 
                     className="absolute left-0 mt-2 w-52 rounded-xl p-1.5 shadow-2xl transition-all overflow-hidden"
                     style={{
-                      backgroundColor: '#161720',
-                      color: '#f3f4f6',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.95), 0 0 15px rgba(170, 59, 255, 0.08)',
+                      backgroundColor: 'var(--bg-surface)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-default)',
+                      boxShadow: 'var(--shadow-lg)',
                       zIndex: 999
                     }}
                   >
                     <div 
                       className="px-3 py-1.5 flex items-center gap-1.5 mb-1"
-                      style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}
+                      style={{ borderBottom: '1px solid var(--border-subtle)' }}
                     >
                       <Sparkles size={11} style={{ color: '#c084fc' }} />
                       <span className="text-[10px] font-extrabold tracking-wider uppercase" style={{ color: '#9ca3af' }}>
@@ -749,20 +749,20 @@ export function TaskDetailsPage() {
                             }}
                             className="w-full text-left px-3 py-1.5 text-xs font-semibold flex items-center justify-between transition-all rounded-lg"
                             style={{
-                              backgroundColor: isSelected ? 'rgba(170, 59, 255, 0.15)' : 'transparent',
-                              color: isSelected ? '#ffffff' : '#d1d5db',
+                              backgroundColor: isSelected ? 'var(--accent-light)' : 'transparent',
+                              color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
                               cursor: 'pointer'
                             }}
                             onMouseEnter={(e) => {
                               if (!isSelected) {
-                                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
-                                e.currentTarget.style.color = '#ffffff';
+                                e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
+                                e.currentTarget.style.color = 'var(--text-primary)';
                               }
                             }}
                             onMouseLeave={(e) => {
                               if (!isSelected) {
                                 e.currentTarget.style.backgroundColor = 'transparent';
-                                e.currentTarget.style.color = '#d1d5db';
+                                e.currentTarget.style.color = 'var(--text-primary)';
                               }
                             }}
                           >
@@ -827,16 +827,16 @@ export function TaskDetailsPage() {
                         <div 
                           className="absolute left-0 mt-2 w-52 rounded-xl p-1.5 shadow-2xl transition-all overflow-hidden"
                           style={{
-                            backgroundColor: '#161720',
-                            color: '#f3f4f6',
-                            border: '1px solid rgba(255, 255, 255, 0.12)',
-                            boxShadow: '0 20px 40px -5px rgba(0, 0, 0, 0.95), 0 0 15px rgba(239, 68, 68, 0.08)',
+                            backgroundColor: 'var(--bg-surface)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--border-default)',
+                            boxShadow: 'var(--shadow-lg)',
                             zIndex: 999
                           }}
                         >
                           <div 
                             className="px-3 py-1.5 flex items-center gap-1.5 mb-1"
-                            style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}
+                            style={{ borderBottom: '1px solid var(--border-subtle)' }}
                           >
                             <AlertTriangle size={11} style={{ color: '#f87171' }} />
                             <span className="text-[10px] font-extrabold tracking-wider uppercase" style={{ color: '#9ca3af' }}>
@@ -859,20 +859,20 @@ export function TaskDetailsPage() {
                                   }}
                                   className="w-full text-left px-3 py-1.5 text-xs font-semibold flex items-center justify-between transition-all rounded-lg"
                                   style={{
-                                    backgroundColor: isSelected ? 'rgba(170, 59, 255, 0.15)' : 'transparent',
-                                    color: isSelected ? '#ffffff' : '#d1d5db',
+                                    backgroundColor: isSelected ? 'var(--accent-light)' : 'transparent',
+                                    color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
                                     cursor: 'pointer'
                                   }}
                                   onMouseEnter={(e) => {
                                     if (!isSelected) {
-                                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
-                                      e.currentTarget.style.color = '#ffffff';
+                                      e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
+                                      e.currentTarget.style.color = 'var(--text-primary)';
                                     }
                                   }}
                                   onMouseLeave={(e) => {
                                     if (!isSelected) {
                                       e.currentTarget.style.backgroundColor = 'transparent';
-                                      e.currentTarget.style.color = '#d1d5db';
+                                      e.currentTarget.style.color = 'var(--text-primary)';
                                     }
                                   }}
                                 >
@@ -1472,7 +1472,7 @@ export function TaskDetailsPage() {
         >
           <div 
             className="bg-surface border border-subtle rounded-2xl p-6 shadow-2xl max-w-md w-full space-y-4 animate-in fade-in zoom-in-95 duration-150"
-            style={{ backgroundColor: 'var(--bg-surface, #18181b)' }}
+            style={{ backgroundColor: 'var(--bg-surface)' }}
           >
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm text-primary flex items-center gap-2">
@@ -1504,9 +1504,9 @@ export function TaskDetailsPage() {
                 placeholder="State why the review was rejected (e.g., audio proof missing details, bug reproducible)..."
                 className="input text-xs resize-none rounded-xl"
                 style={{
-                  backgroundColor: '#1f2029',
-                  color: '#f3f4f6',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  backgroundColor: 'var(--bg-soft)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-default)',
                   minHeight: '80px'
                 }}
               />

@@ -75,10 +75,10 @@ export function DeleteConfirmModal({
       <div
         className="modal"
         style={{
-          background: '#13151b',
+          background: 'var(--bg-card)',
           border: '1px solid rgba(239, 68, 68, 0.28)',
           borderRadius: '18px',
-          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 25px rgba(239, 68, 68, 0.12)',
+          boxShadow: '0 25px 60px -15px rgba(163, 171, 189, 0.4), 0 0 25px rgba(239, 68, 68, 0.08)',
           width: '100%',
           maxWidth: '460px',
           overflow: 'hidden',
@@ -92,7 +92,7 @@ export function DeleteConfirmModal({
             alignItems: 'center', 
             justifyContent: 'space-between',
             padding: '18px 22px 14px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.07)'
+            borderBottom: '1px solid var(--border-subtle)'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -140,7 +140,7 @@ export function DeleteConfirmModal({
 
         {/* Modal Body */}
         <div style={{ padding: '22px' }}>
-          <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#f1f5f9', fontWeight: 500 }}>
+          <p style={{ margin: '0 0 16px', fontSize: '14px', color: 'var(--text-primary)', fontWeight: 500 }}>
             Do you want to delete this record?
           </p>
 
@@ -148,8 +148,8 @@ export function DeleteConfirmModal({
           {(recordTitle || recordSubtitle || recordType) && (
             <div
               style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                backgroundColor: 'var(--bg-elevated)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '10px',
                 padding: '12px 14px',
                 marginBottom: '16px',
@@ -165,20 +165,20 @@ export function DeleteConfirmModal({
                     padding: '2px 8px',
                     borderRadius: '4px',
                     backgroundColor: 'rgba(239, 68, 68, 0.14)',
-                    color: '#fca5a5',
+                    color: '#dc2626',
                     border: '1px solid rgba(239, 68, 68, 0.25)',
                   }}
                 >
                   {recordType}
                 </span>
                 {recordSubtitle && (
-                  <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                     {recordSubtitle}
                   </span>
                 )}
               </div>
               {recordTitle && (
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc', wordBreak: 'break-word' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-word' }}>
                   {recordTitle}
                 </div>
               )}
@@ -193,9 +193,9 @@ export function DeleteConfirmModal({
               gap: '10px',
               padding: '10px 12px',
               borderRadius: '8px',
-              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+              backgroundColor: 'var(--red-subtle)',
               border: '1px solid rgba(239, 68, 68, 0.2)',
-              color: '#fca5a5',
+              color: 'var(--red)',
               fontSize: '12px',
               lineHeight: 1.4,
             }}

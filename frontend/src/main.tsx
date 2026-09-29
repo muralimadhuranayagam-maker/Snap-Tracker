@@ -34,14 +34,16 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           position="top-right"
           toastOptions={{
             style: {
-              background: '#1e293b',
-              color: '#f1f5f9',
-              border: '1px solid #334155',
-              borderRadius: '10px',
-              fontSize: '14px',
+              background: '#FFFFFF',
+              color: '#1E293B',
+              border: '1px solid #E2E8F0',
+              borderRadius: '12px',
+              fontSize: '13.5px',
+              fontWeight: 500,
+              boxShadow: '6px 6px 14px rgba(163, 171, 189, 0.28), -6px -6px 14px rgba(255, 255, 255, 0.85)',
             },
-            success: { iconTheme: { primary: '#22c55e', secondary: '#1e293b' } },
-            error: { iconTheme: { primary: '#ef4444', secondary: '#1e293b' } },
+            success: { iconTheme: { primary: '#16A34A', secondary: '#FFFFFF' } },
+            error: { iconTheme: { primary: '#DC2626', secondary: '#FFFFFF' } },
           }}
         />
       </QueryClientProvider>

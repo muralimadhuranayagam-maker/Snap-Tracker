@@ -365,7 +365,7 @@ export function ProjectTasksModal({ isOpen, onClose, project, onAddTask }: Proje
               justifyContent: 'space-between', 
               padding: '10px 24px', 
               borderTop: '1px solid var(--border-subtle)', 
-              background: 'rgba(24, 24, 27, 0.3)',
+              background: 'var(--bg-elevated)',
               gap: '12px',
               flexWrap: 'wrap'
             }}
@@ -504,8 +504,8 @@ export function ProjectTasksModal({ isOpen, onClose, project, onAddTask }: Proje
                   position: 'sticky',
                   top: 0,
                   zIndex: 10,
-                  background: '#0d0d10',
-                  boxShadow: '0 1px 0 rgba(255, 255, 255, 0.08)'
+                  background: 'var(--bg-elevated)',
+                  boxShadow: '0 1px 0 var(--border-subtle)'
                 }}
               >
                 <tr className="text-muted text-[11px] font-bold uppercase tracking-wider border-b border-subtle">

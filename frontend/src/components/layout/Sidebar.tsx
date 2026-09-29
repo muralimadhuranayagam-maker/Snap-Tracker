@@ -64,14 +64,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     height: '20px',
     padding: '0 6px',
     borderRadius: '10px',
-    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+    background: 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)',
     color: '#ffffff',
     fontSize: '11px',
     fontWeight: 700,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 2px 8px rgba(59, 130, 246, 0.5)',
+    boxShadow: '0 2px 8px rgba(124, 58, 237, 0.4)',
     border: '1px solid rgba(255, 255, 255, 0.2)',
     marginLeft: 'auto'
   };

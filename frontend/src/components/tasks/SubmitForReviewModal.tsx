@@ -137,7 +137,7 @@ export function SubmitForReviewModal({ isOpen, onClose, task, onSuccess }: Submi
       <div 
         className="bg-surface border border-subtle rounded-2xl shadow-2xl w-full flex flex-col max-h-[90vh] my-auto overflow-hidden animate-in fade-in zoom-in-95 duration-150"
         style={{ 
-          backgroundColor: 'var(--bg-surface, #18181b)',
+          backgroundColor: 'var(--bg-card, #ffffff)',
           maxWidth: '640px',
           width: '100%'
         }}
